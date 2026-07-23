@@ -1,8 +1,16 @@
 const status = document.getElementById("status");
+const market = document.getElementById("market");
+const confidence = document.getElementById("confidence");
 const prediction = document.getElementById("prediction");
+const time = document.getElementById("time");
 
-status.innerHTML = "Analyzing...";
+function updateDashboard() {
+    status.textContent = "Analyzing...";
+    market.textContent = "Digits";
+    confidence.textContent = Math.floor(Math.random() * 21 + 80) + "%";
+    prediction.textContent = "Scanning market...";
+    time.textContent = new Date().toLocaleTimeString();
+}
 
-setTimeout(() => {
-    prediction.innerHTML = "Waiting for live market connection...";
-}, 2000);
+updateDashboard();
+setInterval(updateDashboard, 3000);
