@@ -1,0 +1,32 @@
+body {
+    margin: 0;
+    padding: 0;
+    background: #111827;
+    color: white;
+    font-family: Arial, sans-serif;
+}
+
+header {
+    background: #1f2937;
+    padding: 20px;
+    text-align: center;
+    font-size: 24px;
+    font-weight: bold;
+}
+
+.container {
+    padding: 20px;
+}
+
+.card {
+    background: #1f2937;
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 20px;
+}
+
+.status {
+    color: #00ff66;
+    font-size: 18px;
+    font-weight: bold;
+}
