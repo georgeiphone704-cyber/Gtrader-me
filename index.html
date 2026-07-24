@@ -1,27 +1,44 @@
 <!DOCTYPE html>
-<html>
-
+<html lang="en">
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Deriv Digits AI</title>
+
     <link rel="stylesheet" href="style.css">
 </head>
 
 <body>
 
 <header>
-    Deriv Digits AI
+    <h1>Deriv Digits AI</h1>
 </header>
 
 <div class="container">
 
     <div class="card">
-        <h2>Market Status</h2>
-        <p class="status">Analyzing...</p>
+        <h2>Status</h2>
+        <p id="status">Connecting...</p>
     </div>
 
     <div class="card">
-        <h2>Signal</h2>
-        <p>Waiting...</p>
+        <h2>Market</h2>
+        <p id="market">Digits</p>
+    </div>
+
+    <div class="card">
+        <h2>Confidence</h2>
+        <p id="confidence">0%</p>
+    </div>
+
+    <div class="card">
+        <h2>Prediction</h2>
+        <p id="prediction">Waiting...</p>
+    </div>
+
+    <div class="card">
+        <h2>Time</h2>
+        <p id="time">--:--:--</p>
     </div>
 
 </div>
@@ -29,5 +46,4 @@
 <script src="script.js"></script>
 
 </body>
-
 </html>
