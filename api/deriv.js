@@ -1,25 +1,58 @@
-const DERIV_WS = "wss://ws.derivws.com/websockets/v3?app_id=1089";
+const APP_ID = 1089;
+const SYMBOL = "R_100";
 
-let ws = null;
+let socket = null;
 
 function connectDeriv() {
-    ws = new WebSocket(DERIV_WS);
 
-    ws.onopen = () => {
+    socket = new WebSocket(`wss://ws.derivws.com/websockets/v3?app_id=${APP_ID}`);
+
+    socket.onopen = () => {
+
         console.log("Connected to Deriv");
+
+        socket.send(JSON.stringify({
+            ticks: SYMBOL
+        }));
+
     };
 
-    ws.onmessage = (event) => {
-        console.log(event.data);
+    socket.onmessage = (event) => {
+
+        const data = JSON.parse(event.data);
+
+        if (data.tick) {
+
+            const tick = {
+                quote: data.tick.quote,
+                epoch: data.tick.epoch,
+                digit: Number(String(data.tick.quote).slice(-1))
+            };
+
+            console.log(tick);
+
+            if (window.engine) {
+                window.engine.addTick(tick);
+            }
+
+        }
+
     };
 
-    ws.onclose = () => {
-        console.log("Disconnected");
+    socket.onclose = () => {
+
+        console.log("Disconnected... reconnecting");
+
+        setTimeout(connectDeriv, 3000);
+
     };
 
-    ws.onerror = (error) => {
+    socket.onerror = (error) => {
+
         console.log(error);
+
     };
+
 }
 
 connectDeriv();
