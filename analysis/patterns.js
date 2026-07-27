@@ -4,46 +4,32 @@ class PatternEngine {
         this.memory = memory;
     }
 
-    getLastDigits(count = 20) {
-        return this.memory.digits.slice(-count);
-    }
-
-    getFrequency() {
-        return [...this.memory.frequencies];
-    }
-
-    getHotDigits() {
-
-        const frequency = this.getFrequency();
-
-        return frequency
-            .map((count, digit) => ({ digit, count }))
-            .sort((a, b) => b.count - a.count);
-
-    }
-
-    getColdDigits() {
-
-        const frequency = this.getFrequency();
-
-        return frequency
-            .map((count, digit) => ({ digit, count }))
-            .sort((a, b) => a.count - b.count);
-
-    }
-
     analyze() {
+
+        const digits = this.memory.digits;
+        const frequencies = this.memory.frequencies;
+
+        const hot = frequencies.indexOf(Math.max(...frequencies));
+        const cold = frequencies.indexOf(Math.min(...frequencies));
 
         return {
 
-            last20: this.getLastDigits(),
+            module: "patterns",
 
-            hot: this.getHotDigits(),
+            score: 0,
 
-            cold: this.getColdDigits()
+            hotDigit: hot,
+
+            coldDigit: cold,
+
+            last20: digits.slice(-20),
+
+            success: true
 
         };
 
     }
 
-                }
+}
+
+window.patternEngine = PatternEngine;
