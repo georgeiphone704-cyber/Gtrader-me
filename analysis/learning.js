@@ -1,48 +1,36 @@
 class LearningEngine {
 
     constructor() {
-
         this.history = [];
-
     }
 
-    record(signal, confidence, digit) {
+    analyze(decisionResult) {
 
         this.history.push({
 
-            time: Date.now(),
+            timestamp: Date.now(),
 
-            signal,
+            signal: decisionResult.signal,
 
-            confidence,
-
-            digit
+            confidence: decisionResult.confidence
 
         });
 
         if (this.history.length > 5000) {
-
             this.history.shift();
-
         }
 
-    }
+        return {
 
-    getHistory() {
+            module: "learning",
 
-        return this.history;
+            score: this.history.length,
 
-    }
+            history: this.history,
 
-    getAccuracy() {
+            success: true
 
-        if (this.history.length === 0) {
-
-            return 0;
-
-        }
-
-        return this.history.length;
+        };
 
     }
 
