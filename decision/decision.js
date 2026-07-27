@@ -1,34 +1,28 @@
 class DecisionEngine {
 
-    constructor() {
+    analyze(confidenceResult) {
 
-        this.signal = "WAIT";
+        let signal = "WAIT";
 
-    }
+        if (confidenceResult.score >= 90) {
 
-    evaluate(confidence) {
+            signal = "SIGNAL";
 
-        if (confidence.score >= 90) {
+        } else if (confidenceResult.score >= 75) {
 
-            this.signal = "SIGNAL";
-
-        } else if (confidence.score >= 75) {
-
-            this.signal = "MONITOR";
-
-        } else {
-
-            this.signal = "WAIT";
+            signal = "MONITOR";
 
         }
 
         return {
 
-            signal: this.signal,
+            module: "decision",
 
-            confidence: confidence.score,
+            signal,
 
-            status: confidence.status
+            confidence: confidenceResult.score,
+
+            success: true
 
         };
 
@@ -36,4 +30,4 @@ class DecisionEngine {
 
 }
 
-window.decisionEngine = new DecisionEngine();
+window.decisionEngine = DecisionEngine;
