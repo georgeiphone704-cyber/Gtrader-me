@@ -4,35 +4,39 @@ class ProbabilityEngine {
         this.memory = memory;
     }
 
-    calculate() {
+    analyze() {
 
         const total = this.memory.digits.length;
 
         if (total === 0) {
-
             return {
+                module: "probability",
                 score: 0,
-                probabilities: Array(10).fill(0)
+                probabilities: [],
+                success: false
             };
-
         }
 
-        const probabilities = this.memory.frequencies.map(count => {
+        const probabilities = this.memory.frequencies.map(count =>
+            Number(((count / total) * 100).toFixed(2))
+        );
 
-            return Number(((count / total) * 100).toFixed(2));
-
-        });
-
-        const highest = Math.max(...probabilities);
+        const score = Math.max(...probabilities);
 
         return {
 
-            score: highest,
+            module: "probability",
 
-            probabilities
+            score,
+
+            probabilities,
+
+            success: true
 
         };
 
     }
 
-  }
+}
+
+window.probabilityEngine = ProbabilityEngine;
