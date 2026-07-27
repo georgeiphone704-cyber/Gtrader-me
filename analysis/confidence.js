@@ -1,25 +1,35 @@
 class ConfidenceEngine {
 
-    constructor() {
-        this.maxScore = 100;
-    }
+    analyze(patternResult, probabilityResult, statisticsResult) {
 
-    calculate(patternScore, probabilityScore, statisticsScore) {
+        const score = Number((
 
-        const total =
-            (patternScore + probabilityScore + statisticsScore) / 3;
+            (patternResult.score +
+            probabilityResult.score +
+            statisticsResult.score)
+
+            / 3
+
+        ).toFixed(2));
 
         return {
 
-            score: Number(total.toFixed(2)),
+            module: "confidence",
 
-            status:
-                total >= 85 ? "HIGH" :
-                total >= 70 ? "MEDIUM" :
-                "LOW"
+            score,
+
+            level:
+
+                score >= 90 ? "HIGH" :
+                score >= 75 ? "MEDIUM" :
+                "LOW",
+
+            success: true
 
         };
 
     }
 
 }
+
+window.confidenceEngine = ConfidenceEngine;
