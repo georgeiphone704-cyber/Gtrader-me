@@ -1,37 +1,38 @@
 class LearningEngine {
 
     constructor() {
+
         this.history = [];
+
     }
 
-    analyze(decisionResult) {
+    analyze(decision) {
+
+        if (!decision) return;
 
         this.history.push({
-
-            timestamp: Date.now(),
-
-            signal: decisionResult.signal,
-
-            confidence: decisionResult.confidence
-
+            time: Date.now(),
+            signal: decision.signal,
+            confidence: decision.confidence
         });
 
-        if (this.history.length > 5000) {
+        if (this.history.length > 1000) {
             this.history.shift();
         }
 
         return {
-
             module: "learning",
-
-            score: this.history.length,
-
-            history: this.history,
-
+            stored: this.history.length,
             success: true
-
         };
+    }
 
+    getHistory() {
+        return this.history;
+    }
+
+    reset() {
+        this.history = [];
     }
 
 }
