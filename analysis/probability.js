@@ -6,37 +6,44 @@ class ProbabilityEngine {
 
     analyze() {
 
-        const total = this.memory.digits.length;
+        const frequencies = this.memory.frequencies;
+        const digits = this.memory.digits;
 
-        if (total === 0) {
+        if (digits.length < 50) {
             return {
                 module: "probability",
                 score: 0,
-                probabilities: [],
+                mostLikely: null,
+                leastLikely: null,
                 success: false
             };
         }
 
-        const probabilities = this.memory.frequencies.map(count =>
-            Number(((count / total) * 100).toFixed(2))
+        const total = frequencies.reduce((a, b) => a + b, 0);
+
+        const probabilities = frequencies.map(count =>
+            total > 0 ? (count / total) * 100 : 0
         );
 
-        const score = Math.max(...probabilities);
+        const maxProbability = Math.max(...probabilities);
+        const minProbability = Math.min(...probabilities);
+
+        const mostLikely = probabilities.indexOf(maxProbability);
+        const leastLikely = probabilities.indexOf(minProbability);
+
+        let score = Math.round(maxProbability * 5);
+
+        if (score > 100) score = 100;
 
         return {
-
             module: "probability",
-
             score,
-
+            mostLikely,
+            leastLikely,
             probabilities,
-
             success: true
-
         };
-
     }
-
 }
 
 window.probabilityEngine = ProbabilityEngine;
