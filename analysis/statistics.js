@@ -6,51 +6,58 @@ class StatisticsEngine {
 
     analyze() {
 
-        const totalTicks = this.memory.digits.length;
-        const frequencies = this.memory.frequencies;
+        const digits = this.memory.digits;
 
-        if (totalTicks === 0) {
-
+        if (digits.length < 50) {
             return {
                 module: "statistics",
                 score: 0,
-                totalTicks: 0,
-                averageFrequency: 0,
-                highestFrequency: 0,
-                lowestFrequency: 0,
+                average: 0,
+                trend: "UNKNOWN",
+                volatility: 0,
                 success: false
             };
-
         }
 
-        const averageFrequency = Number((totalTicks / 10).toFixed(2));
-        const highestFrequency = Math.max(...frequencies);
-        const lowestFrequency = Math.min(...frequencies);
+        const last50 = digits.slice(-50);
 
-        let score = 100 - ((highestFrequency - lowestFrequency) * 2);
+        const average =
+            last50.reduce((sum, digit) => sum + digit, 0) / last50.length;
 
-        score = Math.max(0, Math.min(100, score));
+        const firstHalf =
+            last50.slice(0, 25).reduce((a, b) => a + b, 0) / 25;
+
+        const secondHalf =
+            last50.slice(25).reduce((a, b) => a + b, 0) / 25;
+
+        const trend =
+            secondHalf > firstHalf
+                ? "UP"
+                : secondHalf < firstHalf
+                ? "DOWN"
+                : "SIDEWAYS";
+
+        const variance =
+            last50.reduce(
+                (sum, value) => sum + Math.pow(value - average, 2),
+                0
+            ) / last50.length;
+
+        const volatility = Math.sqrt(variance);
+
+        let score = 100 - Math.round(volatility * 10);
+
+        score = Math.max(0, Math.min(score, 100));
 
         return {
-
             module: "statistics",
-
             score,
-
-            totalTicks,
-
-            averageFrequency,
-
-            highestFrequency,
-
-            lowestFrequency,
-
+            average: Number(average.toFixed(2)),
+            trend,
+            volatility: Number(volatility.toFixed(2)),
             success: true
-
         };
-
     }
-
 }
 
 window.statisticsEngine = StatisticsEngine;
