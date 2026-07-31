@@ -1,16 +1,24 @@
 class DecisionEngine {
 
-    analyze(confidenceResult) {
+    analyze(confidence) {
 
         let signal = "WAIT";
+        let recommendation = "Analyzing";
 
-        if (confidenceResult.score >= 90) {
+        if (confidence.score >= 90) {
 
-            signal = "SIGNAL";
+            signal = "STRONG BUY";
+            recommendation = "High probability entry";
 
-        } else if (confidenceResult.score >= 75) {
+        } else if (confidence.score >= 80) {
 
-            signal = "MONITOR";
+            signal = "BUY";
+            recommendation = "Entry conditions good";
+
+        } else if (confidence.score >= 70) {
+
+            signal = "WATCH";
+            recommendation = "Monitor market";
 
         }
 
@@ -20,7 +28,9 @@ class DecisionEngine {
 
             signal,
 
-            confidence: confidenceResult.score,
+            recommendation,
+
+            confidence: confidence.score,
 
             success: true
 
@@ -30,4 +40,4 @@ class DecisionEngine {
 
 }
 
-window.decisionEngine = DecisionEngine;
+window.DecisionEngine = DecisionEngine;
