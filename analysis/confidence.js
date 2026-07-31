@@ -1,16 +1,39 @@
 class ConfidenceEngine {
 
-    analyze(patternResult, probabilityResult, statisticsResult) {
+    analyze(pattern, probability, statistics) {
 
-        const score = Number((
+        const modules = [
+            pattern,
+            probability,
+            statistics
+        ];
 
-            (patternResult.score +
-            probabilityResult.score +
-            statisticsResult.score)
+        let total = 0;
+        let active = 0;
 
-            / 3
+        for (const module of modules) {
 
-        ).toFixed(2));
+            if (module && module.success) {
+
+                total += module.score;
+                active++;
+
+            }
+
+        }
+
+        if (active === 0) {
+
+            return {
+                module: "confidence",
+                score: 0,
+                activeModules: 0,
+                success: false
+            };
+
+        }
+
+        const score = Math.round(total / active);
 
         return {
 
@@ -18,11 +41,7 @@ class ConfidenceEngine {
 
             score,
 
-            level:
-
-                score >= 90 ? "HIGH" :
-                score >= 75 ? "MEDIUM" :
-                "LOW",
+            activeModules: active,
 
             success: true
 
@@ -32,4 +51,4 @@ class ConfidenceEngine {
 
 }
 
-window.confidenceEngine = ConfidenceEngine;
+window.confidenceEngine = new ConfidenceEngine();
