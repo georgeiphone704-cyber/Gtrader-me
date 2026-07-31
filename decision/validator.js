@@ -1,20 +1,22 @@
 class ValidatorEngine {
 
-    constructor() {
-        this.minimumConfidence = 85;
-        this.minimumTicks = 100;
-    }
-
     validate(memory, confidence) {
 
-        if (memory.digits.length < this.minimumTicks) {
+        if (!confidence.success) {
             return {
                 valid: false,
-                reason: "Not enough data"
+                reason: "Confidence unavailable"
             };
         }
 
-        if (confidence.score < this.minimumConfidence) {
+        if (memory.ticks.length < 100) {
+            return {
+                valid: false,
+                reason: "Collecting market data"
+            };
+        }
+
+        if (confidence.score < 75) {
             return {
                 valid: false,
                 reason: "Confidence too low"
@@ -23,9 +25,8 @@ class ValidatorEngine {
 
         return {
             valid: true,
-            reason: "Validation passed"
+            reason: "Conditions satisfied"
         };
-
     }
 
 }
