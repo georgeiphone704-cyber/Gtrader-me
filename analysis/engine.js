@@ -69,6 +69,17 @@ class AnalysisEngine {
             this.modules.learning =
                 window.learningEngine;
 
+        if (window.TransitionEngine)
+    this.modules.transition =
+        new window.TransitionEngine(this.memory);
+
+if (window.MarkovEngine)
+    this.modules.markov =
+        new window.MarkovEngine(this.memory);
+
+if (window.CycleEngine)
+    this.modules.cycle =
+        new window.CycleEngine(this.memory);
     }
 
     receiveTick(data) {
