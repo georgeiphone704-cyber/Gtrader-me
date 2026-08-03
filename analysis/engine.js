@@ -202,6 +202,18 @@ if (window.CycleEngine)
 
         };
 
+        const transitionResult = this.modules.transition
+    ? this.modules.transition.analyze()
+    : { score: 0 };
+
+const markovResult = this.modules.markov
+    ? this.modules.markov.analyze()
+    : { score: 0 };
+
+const cycleResult = this.modules.cycle
+    ? this.modules.cycle.analyze()
+    : { score: 0 };
+        
         if (validationResult.valid) {
 
             if (this.modules.decision) {
