@@ -170,12 +170,15 @@ if (window.CycleEngine)
                 };
 
         const confidenceResult =
-            this.modules.confidence
-                ? this.modules.confidence.analyze(
-                    patternResult,
-                    probabilityResult,
-                    statisticsResult
-                )
+    this.modules.confidence
+        ? this.modules.confidence.analyze(
+        patternResult,
+        probabilityResult,
+        statisticsResult,
+        transitionResult,
+        markovResult,
+        cycleResult
+    )
                 : {
                     module: "confidence",
                     score: 0,
