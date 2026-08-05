@@ -1,11 +1,21 @@
 class ConfidenceEngine {
 
-    analyze(pattern, probability, statistics) {
+    analyze(
+        pattern,
+        probability,
+        statistics,
+        transition,
+        markov,
+        cycle
+    ) {
 
         const modules = [
             pattern,
             probability,
-            statistics
+            statistics,
+            transition,
+            markov,
+            cycle
         ];
 
         let total = 0;
