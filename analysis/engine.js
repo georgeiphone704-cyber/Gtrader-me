@@ -168,7 +168,17 @@ if (window.CycleEngine)
                     score: 0,
                     success: false
                 };
+        const transitionResult = this.modules.transition
+    ? this.modules.transition.analyze()
+    : { score: 0 };
 
+const markovResult = this.modules.markov
+    ? this.modules.markov.analyze()
+    : { score: 0 };
+
+const cycleResult = this.modules.cycle
+    ? this.modules.cycle.analyze()
+    : { score: 0 };
         const confidenceResult =
     this.modules.confidence
         ? this.modules.confidence.analyze(
@@ -204,18 +214,6 @@ if (window.CycleEngine)
             confidence: confidenceResult.score
 
         };
-
-        const transitionResult = this.modules.transition
-    ? this.modules.transition.analyze()
-    : { score: 0 };
-
-const markovResult = this.modules.markov
-    ? this.modules.markov.analyze()
-    : { score: 0 };
-
-const cycleResult = this.modules.cycle
-    ? this.modules.cycle.analyze()
-    : { score: 0 };
         
         if (validationResult.valid) {
 
@@ -317,8 +315,6 @@ const cycleResult = this.modules.cycle
             "time",
             new Date().toLocaleTimeString()
         );
-
-    }Part 2 continues here...
 
     }
 
