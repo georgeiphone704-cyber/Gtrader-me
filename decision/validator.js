@@ -9,14 +9,14 @@ class ValidatorEngine {
             };
         }
 
-        if (memory.ticks.length < 100) {
+        if (memory.ticks.length < 500) {
             return {
                 valid: false,
                 reason: "Collecting market data"
             };
         }
 
-        if (confidence.score < 75) {
+        if (confidence.score < 85) {
             return {
                 valid: false,
                 reason: "Confidence too low"
