@@ -9,7 +9,7 @@ class ValidatorEngine {
             };
         }
 
-        if (memory.ticks.length < 500) {
+        if (memory.ticks.length < 1000) {
             return {
                 valid: false,
                 reason: "Collecting market data"
