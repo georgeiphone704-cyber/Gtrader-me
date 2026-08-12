@@ -1,58 +1,125 @@
+/*
+ * ============================================================
+ * GTRADER-ME MASTER ANALYSIS ENGINE
+ * ============================================================
+ *
+ * Responsibilities:
+ * - Receive Deriv ticks
+ * - Maintain separate memory for every market
+ * - Run all analysis modules
+ * - Combine module results
+ * - Run confidence / validation / decision
+ * - Feed results to learning
+ * - Expose market states to the dashboard
+ *
+ * Supported markets:
+ * R_10
+ * R_25
+ * R_50
+ * R_75
+ * R_100
+ * 1HZ10V
+ * 1HZ25V
+ * 1HZ50V
+ * 1HZ75V
+ * 1HZ100V
+ *
+ * This engine DOES NOT place trades.
+ * ============================================================
+ */
+
 class AnalysisEngine {
 
     constructor() {
 
-        /*
-         * =========================================================
-         * CORE MEMORY
-         * =========================================================
-         */
+        /* ======================================================
+         * MARKET CONFIGURATION
+         * ====================================================== */
 
-        this.memory = {
-            maxTicks: 10000,
-            ticks: [],
-            digits: [],
-            frequencies: Array(10).fill(0)
-        };
+        this.markets = [
+            "R_10",
+            "R_25",
+            "R_50",
+            "R_75",
+            "R_100",
+            "1HZ10V",
+            "1HZ25V",
+            "1HZ50V",
+            "1HZ75V",
+            "1HZ100V"
+        ];
+
+        this.defaultMarket = "R_100";
+
+        this.maxTicks = 10000;
+
+        this.analysisWindow = 300;
+
+        this.minimumAnalysisTicks = 30;
 
 
-        /*
-         * =========================================================
-         * CURRENT ANALYSIS STATE
-         * =========================================================
-         */
+        /* ======================================================
+         * MARKET MEMORIES
+         * ====================================================== */
+
+        this.marketMemories = {};
+
+        for (const market of this.markets) {
+            this.marketMemories[market] =
+                this.createMarketMemory();
+        }
+
+
+        /* ======================================================
+         * GLOBAL DASHBOARD STATE
+         * ====================================================== */
 
         this.analysis = {
 
-            market: "R_100",
+            market:
+                this.defaultMarket,
 
-            status: "Connecting...",
+            status:
+                "Connecting...",
 
-            lastDigit: "-",
+            lastDigit:
+                "-",
 
-            currentTick: 0,
+            currentTick:
+                0,
 
-            pattern: "Waiting...",
+            pattern:
+                "Waiting...",
 
-            probability: 0,
+            probability:
+                0,
 
-            confidence: 0,
+            confidence:
+                0,
 
-            signal: "WAIT",
+            signal:
+                "WAIT",
 
-            recommendation: "Analyzing...",
+            recommendation:
+                "Analyzing...",
 
-            decision: "WAIT",
+            decision:
+                "WAIT",
 
-            prediction: null,
+            prediction:
+                null,
 
-            modulesAgreeing: 0,
+            modulesAgreeing:
+                0,
 
-            activeModules: 0,
+            activeModules:
+                0,
 
-            tickCount: 0,
+            tickCount:
+                0,
 
-            lastUpdate: 0,
+            lastUpdate:
+                0,
 
             markov: {
                 score: 0,
@@ -109,20 +176,16 @@ class AnalysisEngine {
         };
 
 
-        /*
-         * =========================================================
+        /* ======================================================
          * MODULE REGISTRY
-         * =========================================================
-         */
+         * ====================================================== */
 
         this.modules = {};
 
 
-        /*
-         * =========================================================
+        /* ======================================================
          * ENGINE STATE
-         * =========================================================
-         */
+         * ====================================================== */
 
         this.started = false;
 
@@ -132,19 +195,60 @@ class AnalysisEngine {
 
         this.lastTickTime = 0;
 
-        this.analysisWindow = 300;
-
-        this.minimumAnalysisTicks = 30;
-
-        this.defaultMarket = "R_100";
     }
 
 
-    /*
-     * =========================================================
+    /* ==========================================================
+     * CREATE MARKET MEMORY
+     * ========================================================== */
+
+    createMarketMemory() {
+
+        return {
+
+            ticks: [],
+
+            digits: [],
+
+            frequencies:
+                Array(10).fill(0),
+
+            analysis: {
+
+                lastDigit: null,
+
+                currentTick: null,
+
+                confidence: 0,
+
+                probability: 0,
+
+                signal: "WAIT",
+
+                prediction: null,
+
+                recommendation: "Waiting",
+
+                decision: "WAIT",
+
+                modulesAgreeing: 0,
+
+                activeModules: 0,
+
+                updated: 0,
+
+                results: {}
+
+            }
+
+        };
+
+    }
+
+
+    /* ==========================================================
      * INITIALIZE
-     * =========================================================
-     */
+     * ========================================================== */
 
     initialize() {
 
@@ -168,20 +272,15 @@ class AnalysisEngine {
         this.emit();
 
         return this.getState();
+
     }
 
 
-    /*
-     * =========================================================
-     * CONNECT ALL MODULES
-     * =========================================================
-     */
+    /* ==========================================================
+     * CONNECT MODULES
+     * ========================================================== */
 
     connectModules() {
-
-        /*
-         * PATTERNS
-         */
 
         if (window.patternsEngine) {
 
@@ -196,10 +295,6 @@ class AnalysisEngine {
         }
 
 
-        /*
-         * PROBABILITY
-         */
-
         if (window.probabilityEngine) {
 
             this.modules.probability =
@@ -212,10 +307,6 @@ class AnalysisEngine {
 
         }
 
-
-        /*
-         * STATISTICS
-         */
 
         if (window.statisticsEngine) {
 
@@ -230,10 +321,6 @@ class AnalysisEngine {
         }
 
 
-        /*
-         * TRANSITION
-         */
-
         if (window.transitionEngine) {
 
             this.modules.transition =
@@ -246,10 +333,6 @@ class AnalysisEngine {
 
         }
 
-
-        /*
-         * MARKOV
-         */
 
         if (window.markovEngine) {
 
@@ -264,10 +347,6 @@ class AnalysisEngine {
         }
 
 
-        /*
-         * CYCLE
-         */
-
         if (window.cycleEngine) {
 
             this.modules.cycle =
@@ -280,10 +359,6 @@ class AnalysisEngine {
 
         }
 
-
-        /*
-         * CONFIDENCE
-         */
 
         if (window.confidenceEngine) {
 
@@ -298,10 +373,6 @@ class AnalysisEngine {
         }
 
 
-        /*
-         * LEARNING
-         */
-
         if (window.learningEngine) {
 
             this.modules.learning =
@@ -315,10 +386,6 @@ class AnalysisEngine {
         }
 
 
-        /*
-         * VALIDATOR
-         */
-
         if (window.validatorEngine) {
 
             this.modules.validator =
@@ -326,10 +393,6 @@ class AnalysisEngine {
 
         }
 
-
-        /*
-         * DECISION
-         */
 
         if (window.decisionEngine) {
 
@@ -339,10 +402,6 @@ class AnalysisEngine {
         }
 
 
-        /*
-         * ENTRY LOGIC
-         */
-
         if (window.entryLogic) {
 
             this.modules.entryLogic =
@@ -350,10 +409,6 @@ class AnalysisEngine {
 
         }
 
-
-        /*
-         * TRADE MANAGER
-         */
 
         if (window.tradeManager) {
 
@@ -363,10 +418,6 @@ class AnalysisEngine {
         }
 
 
-        /*
-         * PAPER TRADING
-         */
-
         if (window.paperTrading) {
 
             this.modules.paperTrading =
@@ -375,10 +426,6 @@ class AnalysisEngine {
         }
 
 
-        /*
-         * RISK MANAGER
-         */
-
         if (window.riskManager) {
 
             this.modules.riskManager =
@@ -386,10 +433,6 @@ class AnalysisEngine {
 
         }
 
-
-        /*
-         * PERFORMANCE
-         */
 
         if (window.performanceEngine) {
 
@@ -405,11 +448,9 @@ class AnalysisEngine {
     }
 
 
-    /*
-     * =========================================================
+    /* ==========================================================
      * COUNT ANALYSIS MODULES
-     * =========================================================
-     */
+     * ========================================================== */
 
     countAnalysisModules() {
 
@@ -423,35 +464,45 @@ class AnalysisEngine {
         ];
 
         return names.filter(
-            name => !!this.modules[name]
+            name =>
+                !!this.modules[name]
         ).length;
 
     }
 
 
-    /*
-     * =========================================================
+    /* ==========================================================
      * RECEIVE TICK
-     * =========================================================
-     */
+     * ========================================================== */
 
     receiveTick(data) {
 
         if (!this.started) {
-
             this.initialize();
-
         }
 
-        if (this.paused) {
-
-            return this.getState();
-
-        }
-
-        if (!data) {
-
+        if (this.paused || !data) {
             return null;
+        }
+
+
+        const market =
+            data.symbol ||
+            data.market ||
+            this.defaultMarket;
+
+
+        /*
+         * Automatically support a market that is added
+         * later without breaking the engine.
+         */
+
+        if (!this.marketMemories[market]) {
+
+            this.marketMemories[market] =
+                this.createMarketMemory();
+
+            this.markets.push(market);
 
         }
 
@@ -461,9 +512,7 @@ class AnalysisEngine {
 
 
         if (!Number.isFinite(quote)) {
-
             return null;
-
         }
 
 
@@ -502,9 +551,7 @@ class AnalysisEngine {
                 ),
 
             symbol:
-                data.symbol ||
-                data.market ||
-                this.analysis.market,
+                market,
 
             pipSize:
                 data.pip_size ??
@@ -514,28 +561,57 @@ class AnalysisEngine {
         };
 
 
-        this.storeTick(tick);
+        this.storeTick(
+            market,
+            tick
+        );
 
-        this.runAnalysis(tick);
 
-        return this.getState();
+        const result =
+            this.runMarketAnalysis(
+                market,
+                tick
+            );
+
+
+        /*
+         * Keep the selected/default market mirrored
+         * in the main dashboard state.
+         */
+
+        if (
+            market ===
+            this.analysis.market
+        ) {
+
+            this.updateGlobalAnalysis(
+                market
+            );
+
+        }
+
+
+        return result;
 
     }
 
 
-    /*
-     * =========================================================
+    /* ==========================================================
      * EXTRACT QUOTE
-     * =========================================================
-     */
+     * ========================================================== */
 
     extractQuote(data) {
 
         const candidates = [
+
             data.quote,
+
             data.price,
+
             data.value,
+
             data.tick?.quote
+
         ];
 
 
@@ -545,6 +621,7 @@ class AnalysisEngine {
 
             const value =
                 Number(candidate);
+
 
             if (
                 Number.isFinite(value)
@@ -562,21 +639,14 @@ class AnalysisEngine {
     }
 
 
-    /*
-     * =========================================================
+    /* ==========================================================
      * EXTRACT LAST DIGIT
-     * =========================================================
-     */
+     * ========================================================== */
 
     extractDigit(
         quote,
         data = {}
     ) {
-
-        /*
-         * If Deriv provides pip_size, use it to determine
-         * the correct number of decimal places.
-         */
 
         const pipSize =
             Number(
@@ -596,14 +666,14 @@ class AnalysisEngine {
                 Math.max(
                     0,
                     Math.round(
-                        -Math.log10(pipSize)
+                        -Math.log10(
+                            pipSize
+                        )
                     )
                 );
 
 
-            if (
-                decimals > 0
-            ) {
+            if (decimals > 0) {
 
                 const formatted =
                     quote.toFixed(
@@ -635,12 +705,6 @@ class AnalysisEngine {
         }
 
 
-        /*
-         * Fallback:
-         * Preserve the decimal representation and take the
-         * final numeric character.
-         */
-
         const text =
             String(quote);
 
@@ -670,36 +734,48 @@ class AnalysisEngine {
     }
 
 
-    /*
-     * =========================================================
-     * STORE TICK
-     * =========================================================
-     */
+    /* ==========================================================
+     * STORE TICK FOR ONE MARKET ONLY
+     * ========================================================== */
 
-    storeTick(tick) {
+    storeTick(
+        market,
+        tick
+    ) {
 
-        this.memory.ticks.push(tick);
+        const memory =
+            this.marketMemories[market];
 
-        this.memory.digits.push(
+
+        if (!memory) {
+            return;
+        }
+
+
+        memory.ticks.push(
+            tick
+        );
+
+
+        memory.digits.push(
             tick.digit
         );
 
-        this.memory.frequencies[
+
+        memory.frequencies[
             tick.digit
         ]++;
 
 
         while (
-            this.memory.ticks.length >
-            this.memory.maxTicks
+            memory.ticks.length >
+            this.maxTicks
         ) {
 
-            const removed =
-                this.memory.ticks.shift();
-
+            memory.ticks.shift();
 
             const removedDigit =
-                this.memory.digits.shift();
+                memory.digits.shift();
 
 
             if (
@@ -708,7 +784,7 @@ class AnalysisEngine {
                 )
             ) {
 
-                this.memory.frequencies[
+                memory.frequencies[
                     removedDigit
                 ]--;
 
@@ -716,47 +792,30 @@ class AnalysisEngine {
 
         }
 
-
-        this.analysis.tickCount =
-            this.memory.ticks.length;
-
     }
 
 
-    /*
-     * =========================================================
-     * RUN ANALYSIS
-     * =========================================================
-     */
+    /* ==========================================================
+     * RUN ANALYSIS FOR ONE MARKET
+     * ========================================================== */
 
-    runAnalysis(tick) {
+    runMarketAnalysis(
+        market,
+        tick
+    ) {
 
-        this.analysis.status =
-            "Analyzing";
-
-
-        this.analysis.lastDigit =
-            tick.digit;
-
-
-        this.analysis.currentTick =
-            tick.quote;
-
-
-        this.analysis.lastUpdate =
-            Date.now();
+        const memory =
+            this.marketMemories[market];
 
 
         const digits =
-            this.memory.digits.slice(
+            memory.digits.slice(
                 -this.analysisWindow
             );
 
 
         /*
-         * -----------------------------------------------------
-         * Minimum data protection
-         * -----------------------------------------------------
+         * Not enough data.
          */
 
         if (
@@ -764,29 +823,51 @@ class AnalysisEngine {
             this.minimumAnalysisTicks
         ) {
 
-            this.analysis.recommendation =
-                "Collecting data";
+            memory.analysis = {
 
-            this.analysis.signal =
-                "WAIT";
+                ...memory.analysis,
 
-            this.analysis.decision =
-                "WAIT";
+                lastDigit:
+                    tick.digit,
 
-            this.updateDashboard();
+                currentTick:
+                    tick.quote,
 
-            this.emit();
+                confidence: 0,
 
-            return;
+                probability: 0,
+
+                signal: "WAIT",
+
+                prediction: null,
+
+                recommendation:
+                    "Collecting data",
+
+                decision:
+                    "WAIT",
+
+                modulesAgreeing: 0,
+
+                activeModules:
+                    this.countAnalysisModules(),
+
+                updated:
+                    Date.now()
+
+            };
+
+
+            return this.getMarketState(
+                market
+            );
 
         }
 
 
-        /*
-         * -----------------------------------------------------
+        /* ======================================================
          * PATTERNS
-         * -----------------------------------------------------
-         */
+         * ====================================================== */
 
         const patternResult =
             this.safeAnalyze(
@@ -796,11 +877,9 @@ class AnalysisEngine {
             );
 
 
-        /*
-         * -----------------------------------------------------
+        /* ======================================================
          * PROBABILITY
-         * -----------------------------------------------------
-         */
+         * ====================================================== */
 
         const probabilityResult =
             this.safeAnalyze(
@@ -810,11 +889,9 @@ class AnalysisEngine {
             );
 
 
-        /*
-         * -----------------------------------------------------
+        /* ======================================================
          * STATISTICS
-         * -----------------------------------------------------
-         */
+         * ====================================================== */
 
         const statisticsResult =
             this.safeAnalyze(
@@ -824,11 +901,9 @@ class AnalysisEngine {
             );
 
 
-        /*
-         * -----------------------------------------------------
+        /* ======================================================
          * TRANSITION
-         * -----------------------------------------------------
-         */
+         * ====================================================== */
 
         const transitionResult =
             this.safeAnalyze(
@@ -838,11 +913,9 @@ class AnalysisEngine {
             );
 
 
-        /*
-         * -----------------------------------------------------
+        /* ======================================================
          * MARKOV
-         * -----------------------------------------------------
-         */
+         * ====================================================== */
 
         const markovResult =
             this.safeAnalyze(
@@ -852,11 +925,9 @@ class AnalysisEngine {
             );
 
 
-        /*
-         * -----------------------------------------------------
+        /* ======================================================
          * CYCLE
-         * -----------------------------------------------------
-         */
+         * ====================================================== */
 
         const cycleResult =
             this.safeAnalyze(
@@ -866,11 +937,9 @@ class AnalysisEngine {
             );
 
 
-        /*
-         * -----------------------------------------------------
+        /* ======================================================
          * CONFIDENCE
-         * -----------------------------------------------------
-         */
+         * ====================================================== */
 
         const confidenceResult =
             this.runConfidence(
@@ -883,11 +952,9 @@ class AnalysisEngine {
             );
 
 
-        /*
-         * -----------------------------------------------------
-         * MASTER VALIDATION
-         * -----------------------------------------------------
-         */
+        /* ======================================================
+         * VALIDATION
+         * ====================================================== */
 
         const validationResult =
             this.runValidator(
@@ -903,11 +970,9 @@ class AnalysisEngine {
             );
 
 
-        /*
-         * -----------------------------------------------------
-         * MASTER DECISION
-         * -----------------------------------------------------
-         */
+        /* ======================================================
+         * DECISION
+         * ====================================================== */
 
         const decisionResult =
             this.runDecision(
@@ -924,11 +989,9 @@ class AnalysisEngine {
             );
 
 
-        /*
-         * -----------------------------------------------------
+        /* ======================================================
          * LEARNING
-         * -----------------------------------------------------
-         */
+         * ====================================================== */
 
         if (
             this.modules.learning &&
@@ -943,108 +1006,4 @@ class AnalysisEngine {
                     decisionResult
                 );
 
-            } catch (error) {
-
-                console.warn(
-                    "Learning module error:",
-                    error
-                );
-
-            }
-
-        }
-
-
-        /*
-         * -----------------------------------------------------
-         * UPDATE ENGINE STATE
-         * -----------------------------------------------------
-         */
-
-        this.updateAnalysisState(
-            tick,
-            patternResult,
-            probabilityResult,
-            statisticsResult,
-            transitionResult,
-            markovResult,
-            cycleResult,
-            confidenceResult,
-            validationResult,
-            decisionResult
-        );
-
-
-        /*
-         * -----------------------------------------------------
-         * DASHBOARD
-         * -----------------------------------------------------
-         */
-
-        this.updateDashboard();
-
-
-        /*
-         * Notify UI/listeners.
-         */
-
-        this.emit();
-
-
-        return this.analysis;
-
-    }
-
-
-    /*
-     * =========================================================
-     * SAFE MODULE ANALYZER
-     * =========================================================
-     */
-
-    safeAnalyze(
-        module,
-        digits,
-        name
-    ) {
-
-        const fallback = {
-
-            module: name,
-
-            success: false,
-
-            score: 0,
-
-            confidence: 0,
-
-            samples:
-                digits.length,
-
-            recommendation:
-                "WAIT"
-
-        };
-
-
-        if (
-            !module ||
-            typeof module.analyze !==
-            "function"
-        ) {
-
-            return fallback;
-
-        }
-
-
-        try {
-
-            const result =
-                module.analyze(
-                    digits
-                );
-
-
-            if (
-      
+           
