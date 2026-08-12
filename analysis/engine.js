@@ -3,63 +3,91 @@
  * GTRADER-ME MASTER ANALYSIS ENGINE
  * ============================================================
  *
- * Responsibilities:
- * - Receive Deriv ticks
- * - Maintain separate memory for every market
- * - Run all analysis modules
- * - Combine module results
- * - Run confidence / validation / decision
- * - Feed results to learning
- * - Expose market states to the dashboard
+ * FLOW:
  *
- * Supported markets:
- * R_10
- * R_25
- * R_50
- * R_75
- * R_100
- * 1HZ10V
- * 1HZ25V
- * 1HZ50V
- * 1HZ75V
- * 1HZ100V
+ * Deriv tick
+ *    ↓
+ * Market selection / market state
+ *    ↓
+ * Independent market memory
+ *    ↓
+ * Analysis modules
+ *    ├── Patterns
+ *    ├── Probability
+ *    ├── Statistics
+ *    ├── Transition
+ *    ├── Markov
+ *    └── Cycle
+ *    ↓
+ * Confidence
+ *    ↓
+ * Validation
+ *    ↓
+ * Decision
+ *    ↓
+ * Learning / dashboard
  *
- * This engine DOES NOT place trades.
+ * IMPORTANT:
+ * - Each market has its own tick/digit history.
+ * - Analysis modules are reused; their code is NOT duplicated.
+ * - This engine does NOT place live trades.
  * ============================================================
  */
 
 class AnalysisEngine {
 
-    constructor() {
+    constructor(options = {}) {
 
         /* ======================================================
          * MARKET CONFIGURATION
          * ====================================================== */
 
-        this.markets = [
-            "R_10",
-            "R_25",
-            "R_50",
-            "R_75",
-            "R_100",
-            "1HZ10V",
-            "1HZ25V",
-            "1HZ50V",
-            "1HZ75V",
-            "1HZ100V"
-        ];
+        this.markets = Array.isArray(options.markets)
+            ? [...options.markets]
+            : [
+                "R_10",
+                "R_25",
+                "R_50",
+                "R_75",
+                "R_100",
+                "1HZ10V",
+                "1HZ25V",
+                "1HZ50V",
+                "1HZ75V",
+                "1HZ100V"
+            ];
 
-        this.defaultMarket = "R_100";
+        this.defaultMarket =
+            options.defaultMarket || "R_100";
 
-        this.maxTicks = 10000;
-
-        this.analysisWindow = 300;
-
-        this.minimumAnalysisTicks = 30;
+        this.activeMarket =
+            this.markets.includes(this.defaultMarket)
+                ? this.defaultMarket
+                : this.markets[0];
 
 
         /* ======================================================
-         * MARKET MEMORIES
+         * DATA CONFIGURATION
+         * ====================================================== */
+
+        this.maxTicks =
+            Number(options.maxTicks) > 0
+                ? Number(options.maxTicks)
+                : 10000;
+
+        this.analysisWindow =
+            Number(options.analysisWindow) > 0
+                ? Number(options.analysisWindow)
+                : 300;
+
+        this.minimumAnalysisTicks =
+            Number(options.minimumAnalysisTicks) > 0
+                ? Number(options.minimumAnalysisTicks)
+                : 30;
+
+
+        /* ======================================================
+         * MARKET MEMORY
          * ====================================================== */
 
         this.marketMemories = {};
@@ -71,113 +99,7 @@ class AnalysisEngine {
 
 
         /* ======================================================
-         * GLOBAL DASHBOARD STATE
-         * ====================================================== */
-
-        this.analysis = {
-
-            market:
-                this.defaultMarket,
-
-            status:
-                "Connecting...",
-
-            lastDigit:
-                "-",
-
-            currentTick:
-                0,
-
-            pattern:
-                "Waiting...",
-
-            probability:
-                0,
-
-            confidence:
-                0,
-
-            signal:
-                "WAIT",
-
-            recommendation:
-                "Analyzing...",
-
-            decision:
-                "WAIT",
-
-            prediction:
-                null,
-
-            modulesAgreeing:
-                0,
-
-            activeModules:
-                0,
-
-            tickCount:
-                0,
-
-            lastUpdate:
-                0,
-
-            markov: {
-                score: 0,
-                confidence: 0,
-                prediction: null,
-                order: 0,
-                recommendation: "WAIT"
-            },
-
-            cycle: {
-                score: 0,
-                confidence: 0,
-                cycleLength: 0,
-                recommendation: "WAIT"
-            },
-
-            patterns: {
-                score: 0,
-                confidence: 0,
-                pattern: "WAIT",
-                digit: null,
-                recommendation: "WAIT"
-            },
-
-            probabilityAnalysis: {
-                score: 0,
-                confidence: 0,
-                prediction: null,
-                recommendation: "WAIT"
-            },
-
-            statistics: {
-                score: 0,
-                confidence: 0,
-                mean: 0,
-                standardDeviation: 0,
-                recommendation: "WAIT"
-            },
-
-            transition: {
-                score: 0,
-                confidence: 0,
-                predictedDigit: null,
-                recommendation: "WAIT"
-            },
-
-            confidenceAnalysis: {
-                score: 0,
-                confidence: 0,
-                agreement: 0,
-                activeModules: 0
-            }
-
-        };
-
-
-        /* ======================================================
-         * MODULE REGISTRY
+         * MODULES
          * ====================================================== */
 
         this.modules = {};
@@ -188,13 +110,54 @@ class AnalysisEngine {
          * ====================================================== */
 
         this.started = false;
-
         this.paused = false;
 
         this.listeners = [];
 
-        this.lastTickTime = 0;
+        this.lastError = null;
 
+
+        /* ======================================================
+         * GLOBAL DASHBOARD STATE
+         * ====================================================== */
+
+        this.analysis = {
+            market: this.activeMarket,
+
+            status: "Initializing",
+
+            lastDigit: null,
+
+            currentTick: null,
+
+            tickCount: 0,
+
+            confidence: 0,
+
+            probability: 0,
+
+            prediction: null,
+
+            signal: "WAIT",
+
+            decision: "WAIT",
+
+            recommendation: "Waiting",
+
+            modulesAgreeing: 0,
+
+            activeModules: 0,
+
+            lastUpdate: 0,
+
+            patterns: {},
+            probabilityAnalysis: {},
+            statistics: {},
+            transition: {},
+            markov: {},
+            cycle: {},
+            confidenceAnalysis: {}
+        };
     }
 
 
@@ -205,44 +168,32 @@ class AnalysisEngine {
     createMarketMemory() {
 
         return {
-
             ticks: [],
-
             digits: [],
-
-            frequencies:
-                Array(10).fill(0),
+            frequencies: Array(10).fill(0),
 
             analysis: {
-
                 lastDigit: null,
-
                 currentTick: null,
+                tickCount: 0,
 
                 confidence: 0,
-
                 probability: 0,
-
-                signal: "WAIT",
 
                 prediction: null,
 
+                signal: "WAIT",
+                decision: "WAIT",
                 recommendation: "Waiting",
 
-                decision: "WAIT",
-
                 modulesAgreeing: 0,
-
                 activeModules: 0,
 
-                updated: 0,
+                lastUpdate: 0,
 
                 results: {}
-
             }
-
         };
-
     }
 
 
@@ -256,200 +207,135 @@ class AnalysisEngine {
             return this.getState();
         }
 
-        this.started = true;
-
-        this.analysis.market =
-            this.defaultMarket;
-
-        this.analysis.status =
-            "Initializing...";
-
         this.connectModules();
 
-        this.analysis.status =
-            "Ready";
+        this.started = true;
+
+        this.analysis.status = "Ready";
+
+        this.updateGlobalState();
 
         this.emit();
 
         return this.getState();
-
     }
 
 
     /* ==========================================================
-     * CONNECT MODULES
+     * CONNECT EXISTING MODULES
      * ========================================================== */
 
     connectModules() {
 
-        if (window.patternsEngine) {
-
-            this.modules.patterns =
-                window.patternsEngine;
-
-        } else if (window.PatternEngine) {
-
-            this.modules.patterns =
-                new window.PatternEngine();
-
-        }
-
-
-        if (window.probabilityEngine) {
-
-            this.modules.probability =
-                window.probabilityEngine;
-
-        } else if (window.ProbabilityEngine) {
-
-            this.modules.probability =
-                new window.ProbabilityEngine();
-
-        }
-
-
-        if (window.statisticsEngine) {
-
-            this.modules.statistics =
-                window.statisticsEngine;
-
-        } else if (window.StatisticsEngine) {
-
-            this.modules.statistics =
-                new window.StatisticsEngine();
-
-        }
-
-
-        if (window.transitionEngine) {
-
-            this.modules.transition =
-                window.transitionEngine;
-
-        } else if (window.TransitionEngine) {
-
-            this.modules.transition =
-                new window.TransitionEngine();
-
-        }
-
-
-        if (window.markovEngine) {
-
-            this.modules.markov =
-                window.markovEngine;
-
-        } else if (window.MarkovEngine) {
-
-            this.modules.markov =
-                new window.MarkovEngine();
-
-        }
-
-
-        if (window.cycleEngine) {
-
-            this.modules.cycle =
-                window.cycleEngine;
-
-        } else if (window.CycleEngine) {
-
-            this.modules.cycle =
-                new window.CycleEngine();
-
-        }
-
-
-        if (window.confidenceEngine) {
-
-            this.modules.confidence =
-                window.confidenceEngine;
-
-        } else if (window.ConfidenceEngine) {
-
-            this.modules.confidence =
-                new window.ConfidenceEngine();
-
-        }
-
-
-        if (window.learningEngine) {
-
-            this.modules.learning =
-                window.learningEngine;
-
-        } else if (window.LearningEngine) {
-
-            this.modules.learning =
-                new window.LearningEngine();
-
-        }
-
-
-        if (window.validatorEngine) {
-
-            this.modules.validator =
-                window.validatorEngine;
-
-        }
-
-
-        if (window.decisionEngine) {
-
-            this.modules.decision =
-                window.decisionEngine;
-
-        }
-
-
-        if (window.entryLogic) {
-
-            this.modules.entryLogic =
-                window.entryLogic;
-
-        }
-
-
-        if (window.tradeManager) {
-
-            this.modules.tradeManager =
-                window.tradeManager;
-
-        }
-
-
-        if (window.paperTrading) {
-
-            this.modules.paperTrading =
-                window.paperTrading;
-
-        }
-
-
-        if (window.riskManager) {
-
-            this.modules.riskManager =
-                window.riskManager;
-
-        }
-
-
-        if (window.performanceEngine) {
-
-            this.modules.performance =
-                window.performanceEngine;
-
-        }
-
+        this.modules.patterns =
+            window.patternsEngine ||
+            this.instantiate("PatternEngine");
+
+        this.modules.probability =
+            window.probabilityEngine ||
+            this.instantiate("ProbabilityEngine");
+
+        this.modules.statistics =
+            window.statisticsEngine ||
+            this.instantiate("StatisticsEngine");
+
+        this.modules.transition =
+            window.transitionEngine ||
+            this.instantiate("TransitionEngine");
+
+        this.modules.markov =
+            window.markovEngine ||
+            this.instantiate("MarkovEngine");
+
+        this.modules.cycle =
+            window.cycleEngine ||
+            this.instantiate("CycleEngine");
+
+        this.modules.confidence =
+            window.confidenceEngine ||
+            this.instantiate("ConfidenceEngine");
+
+        this.modules.learning =
+            window.learningEngine ||
+            this.instantiate("LearningEngine");
+
+        /*
+         * Optional modules.
+         * We do not rebuild them if they are absent.
+         */
+
+        this.modules.validator =
+            window.validatorEngine ||
+            window.ValidatorEngine ||
+            null;
+
+        this.modules.decision =
+            window.decisionEngine ||
+            window.DecisionEngine ||
+            null;
+
+        this.modules.entryLogic =
+            window.entryLogic ||
+            window.EntryLogic ||
+            null;
+
+        this.modules.tradeManager =
+            window.tradeManager ||
+            window.TradeManager ||
+            null;
+
+        this.modules.riskManager =
+            window.riskManager ||
+            window.RiskManager ||
+            null;
+
+        this.modules.paperTrading =
+            window.paperTrading ||
+            window.PaperTradingEngine ||
+            null;
+
+        this.modules.performance =
+            window.performanceEngine ||
+            window.PerformanceEngine ||
+            null;
 
         this.analysis.activeModules =
             this.countAnalysisModules();
-
     }
 
 
     /* ==========================================================
-     * COUNT ANALYSIS MODULES
+     * SAFE MODULE INSTANTIATION
+     * ========================================================== */
+
+    instantiate(className) {
+
+        try {
+
+            const Constructor =
+                window[className];
+
+            if (
+                typeof Constructor ===
+                "function"
+            ) {
+                return new Constructor();
+            }
+
+        } catch (error) {
+
+            console.warn(
+                `${className} could not be created:`,
+                error
+            );
+        }
+
+        return null;
+    }
+
+
+    /* ==========================================================
+     * COUNT CORE MODULES
      * ========================================================== */
 
     countAnalysisModules() {
@@ -467,12 +353,11 @@ class AnalysisEngine {
             name =>
                 !!this.modules[name]
         ).length;
-
     }
 
 
     /* ==========================================================
-     * RECEIVE TICK
+     * RECEIVE DERIV TICK
      * ========================================================== */
 
     receiveTick(data) {
@@ -481,67 +366,55 @@ class AnalysisEngine {
             this.initialize();
         }
 
-        if (this.paused || !data) {
+        if (
+            this.paused ||
+            !data
+        ) {
             return null;
         }
-
 
         const market =
             data.symbol ||
             data.market ||
-            this.defaultMarket;
+            this.activeMarket;
 
-
-        /*
-         * Automatically support a market that is added
-         * later without breaking the engine.
-         */
-
-        if (!this.marketMemories[market]) {
-
-            this.marketMemories[market] =
-                this.createMarketMemory();
-
-            this.markets.push(market);
-
+        if (!market) {
+            return null;
         }
 
+        this.ensureMarket(market);
 
         const quote =
             this.extractQuote(data);
 
-
-        if (!Number.isFinite(quote)) {
+        if (
+            !Number.isFinite(quote)
+        ) {
             return null;
         }
 
-
         const digit =
-            this.extractDigit(
-                quote,
-                data
-            );
-
+            Number.isInteger(data.digit)
+                ? data.digit
+                : this.extractDigit(
+                    quote,
+                    data
+                );
 
         if (
             !Number.isInteger(digit) ||
             digit < 0 ||
             digit > 9
         ) {
-
             return null;
-
         }
 
-
         const tick = {
+            symbol: market,
+            market,
 
             quote,
-
             digit,
-
-            time:
-                Date.now(),
 
             epoch:
                 Number(
@@ -550,49 +423,57 @@ class AnalysisEngine {
                     0
                 ),
 
-            symbol:
-                market,
-
-            pipSize:
+            pip_size:
                 data.pip_size ??
                 data.pipSize ??
-                null
+                null,
 
+            receivedAt:
+                Date.now()
         };
-
 
         this.storeTick(
             market,
             tick
         );
 
-
         const result =
-            this.runMarketAnalysis(
+            this.analyzeMarket(
                 market,
                 tick
             );
 
-
-        /*
-         * Keep the selected/default market mirrored
-         * in the main dashboard state.
-         */
-
         if (
-            market ===
-            this.analysis.market
+            market === this.activeMarket
         ) {
-
-            this.updateGlobalAnalysis(
-                market
-            );
-
+            this.updateGlobalState();
+            this.emit();
         }
 
-
         return result;
+    }
 
+
+    /* ==========================================================
+     * ENSURE MARKET EXISTS
+     * ========================================================== */
+
+    ensureMarket(market) {
+
+        if (
+            !this.marketMemories[market]
+        ) {
+
+            this.marketMemories[market] =
+                this.createMarketMemory();
+        }
+
+        if (
+            !this.markets.includes(market)
+        ) {
+
+            this.markets.push(market);
+        }
     }
 
 
@@ -603,39 +484,25 @@ class AnalysisEngine {
     extractQuote(data) {
 
         const candidates = [
-
             data.quote,
-
             data.price,
-
             data.value,
-
             data.tick?.quote
-
         ];
 
-
-        for (
-            const candidate of candidates
-        ) {
+        for (const candidate of candidates) {
 
             const value =
                 Number(candidate);
 
-
             if (
                 Number.isFinite(value)
             ) {
-
                 return value;
-
             }
-
         }
 
-
         return NaN;
-
     }
 
 
@@ -655,7 +522,6 @@ class AnalysisEngine {
                 NaN
             );
 
-
         if (
             Number.isFinite(pipSize) &&
             pipSize > 0 &&
@@ -672,70 +538,59 @@ class AnalysisEngine {
                     )
                 );
 
-
-            if (decimals > 0) {
+            if (
+                decimals > 0
+            ) {
 
                 const formatted =
                     quote.toFixed(
                         decimals
                     );
 
-
-                const digitsOnly =
+                const digits =
                     formatted.replace(
                         /\D/g,
                         ""
                     );
 
-
                 if (
-                    digitsOnly.length > 0
+                    digits.length > 0
                 ) {
 
                     return Number(
-                        digitsOnly[
-                            digitsOnly.length - 1
+                        digits[
+                            digits.length - 1
                         ]
                     );
-
                 }
-
             }
-
         }
-
 
         const text =
             String(quote);
 
-
-        const numericCharacters =
+        const digits =
             text.replace(
                 /\D/g,
                 ""
             );
 
-
         if (
-            numericCharacters.length === 0
+            digits.length === 0
         ) {
-
             return null;
-
         }
 
-
         return Number(
-            numericCharacters[
-                numericCharacters.length - 1
+            digits[
+                digits.length - 1
             ]
         );
-
     }
 
 
     /* ==========================================================
-     * STORE TICK FOR ONE MARKET ONLY
+     * STORE TICK FOR SPECIFIC MARKET
      * ========================================================== */
 
     storeTick(
@@ -746,26 +601,19 @@ class AnalysisEngine {
         const memory =
             this.marketMemories[market];
 
-
         if (!memory) {
             return;
         }
 
-
-        memory.ticks.push(
-            tick
-        );
-
+        memory.ticks.push(tick);
 
         memory.digits.push(
             tick.digit
         );
 
-
         memory.frequencies[
             tick.digit
         ]++;
-
 
         while (
             memory.ticks.length >
@@ -777,7 +625,6 @@ class AnalysisEngine {
             const removedDigit =
                 memory.digits.shift();
 
-
             if (
                 Number.isInteger(
                     removedDigit
@@ -787,19 +634,16 @@ class AnalysisEngine {
                 memory.frequencies[
                     removedDigit
                 ]--;
-
             }
-
         }
-
     }
 
 
     /* ==========================================================
-     * RUN ANALYSIS FOR ONE MARKET
+     * ANALYZE ONE MARKET
      * ========================================================== */
 
-    runMarketAnalysis(
+    analyzeMarket(
         market,
         tick
     ) {
@@ -807,15 +651,13 @@ class AnalysisEngine {
         const memory =
             this.marketMemories[market];
 
-
         const digits =
             memory.digits.slice(
                 -this.analysisWindow
             );
 
-
         /*
-         * Not enough data.
+         * Not enough observations.
          */
 
         if (
@@ -824,7 +666,6 @@ class AnalysisEngine {
         ) {
 
             memory.analysis = {
-
                 ...memory.analysis,
 
                 lastDigit:
@@ -833,41 +674,46 @@ class AnalysisEngine {
                 currentTick:
                     tick.quote,
 
-                confidence: 0,
+                tickCount:
+                    memory.digits.length,
 
-                probability: 0,
-
-                signal: "WAIT",
-
-                prediction: null,
-
-                recommendation:
-                    "Collecting data",
+                signal:
+                    "WAIT",
 
                 decision:
                     "WAIT",
 
-                modulesAgreeing: 0,
+                recommendation:
+                    "Collecting data",
+
+                confidence:
+                    0,
+
+                prediction:
+                    null,
+
+                lastUpdate:
+                    Date.now(),
 
                 activeModules:
                     this.countAnalysisModules(),
 
-                updated:
-                    Date.now()
+                modulesAgreeing:
+                    0,
 
+                results:
+                    {}
             };
-
 
             return this.getMarketState(
                 market
             );
-
         }
 
 
-        /* ======================================================
-         * PATTERNS
-         * ====================================================== */
+        /*
+         * Run the six core analysis modules.
+         */
 
         const patternResult =
             this.safeAnalyze(
@@ -876,22 +722,12 @@ class AnalysisEngine {
                 "patterns"
             );
 
-
-        /* ======================================================
-         * PROBABILITY
-         * ====================================================== */
-
         const probabilityResult =
             this.safeAnalyze(
                 this.modules.probability,
                 digits,
                 "probability"
             );
-
-
-        /* ======================================================
-         * STATISTICS
-         * ====================================================== */
 
         const statisticsResult =
             this.safeAnalyze(
@@ -900,11 +736,6 @@ class AnalysisEngine {
                 "statistics"
             );
 
-
-        /* ======================================================
-         * TRANSITION
-         * ====================================================== */
-
         const transitionResult =
             this.safeAnalyze(
                 this.modules.transition,
@@ -912,22 +743,12 @@ class AnalysisEngine {
                 "transition"
             );
 
-
-        /* ======================================================
-         * MARKOV
-         * ====================================================== */
-
         const markovResult =
             this.safeAnalyze(
                 this.modules.markov,
                 digits,
                 "markov"
             );
-
-
-        /* ======================================================
-         * CYCLE
-         * ====================================================== */
 
         const cycleResult =
             this.safeAnalyze(
@@ -937,9 +758,9 @@ class AnalysisEngine {
             );
 
 
-        /* ======================================================
-         * CONFIDENCE
-         * ====================================================== */
+        /*
+         * Confidence combines the six analyses.
+         */
 
         const confidenceResult =
             this.runConfidence(
@@ -952,12 +773,12 @@ class AnalysisEngine {
             );
 
 
-        /* ======================================================
-         * VALIDATION
-         * ====================================================== */
+        /*
+         * Validation protects against weak or incomplete evidence.
+         */
 
         const validationResult =
-            this.runValidator(
+            this.runValidation(
                 confidenceResult,
                 {
                     patternResult,
@@ -970,9 +791,9 @@ class AnalysisEngine {
             );
 
 
-        /* ======================================================
-         * DECISION
-         * ====================================================== */
+        /*
+         * Final analytical decision.
+         */
 
         const decisionResult =
             this.runDecision(
@@ -989,21 +810,293 @@ class AnalysisEngine {
             );
 
 
-        /* ======================================================
-         * LEARNING
-         * ====================================================== */
+        /*
+         * Prefer the most structured prediction.
+         */
+
+        const prediction =
+            this.extractPrediction(
+                markovResult,
+                transitionResult,
+                probabilityResult,
+                patternResult
+            );
+
+
+        /*
+         * Module agreement.
+         */
+
+        const agreement =
+            this.calculateAgreement([
+                patternResult,
+                probabilityResult,
+                statisticsResult,
+                transitionResult,
+                markovResult,
+                cycleResult
+            ]);
+
+
+        /*
+         * Save complete market result.
+         */
+
+        memory.analysis = {
+
+            lastDigit:
+                tick.digit,
+
+            currentTick:
+                tick.quote,
+
+            tickCount:
+                memory.digits.length,
+
+            confidence:
+                this.safeNumber(
+                    confidenceResult.confidence ??
+                    confidenceResult.score
+                ),
+
+            probability:
+                this.safeNumber(
+                    probabilityResult.score
+                ),
+
+            prediction,
+
+            signal:
+                decisionResult.signal ||
+                "WAIT",
+
+            decision:
+                decisionResult.decision ||
+                decisionResult.signal ||
+                "WAIT",
+
+            recommendation:
+                decisionResult.reason ||
+                validationResult.reason ||
+                "Waiting",
+
+            modulesAgreeing:
+                agreement,
+
+            activeModules:
+                this.countAnalysisModules(),
+
+            lastUpdate:
+                Date.now(),
+
+            results: {
+
+                patterns:
+                    patternResult,
+
+                probability:
+                    probabilityResult,
+
+                statistics:
+                    statisticsResult,
+
+                transition:
+                    transitionResult,
+
+                markov:
+                    markovResult,
+
+                cycle:
+                    cycleResult,
+
+                            }
+        };
+
+        this.updateDashboard();
+
+        return this.memory.analysis;
+    }
+
+    countAnalysisModules() {
+        return Object.keys(this.modules).filter(
+            key => this.modules[key] !== null &&
+                   this.modules[key] !== undefined
+        ).length;
+    }
+
+    safeNumber(value, fallback = 0) {
+        const number = Number(value);
+
+        if (!Number.isFinite(number)) {
+            return fallback;
+        }
+
+        return number;
+    }
+
+    extractPrediction(
+        markovResult,
+        transitionResult,
+        probabilityResult,
+        patternResult
+    ) {
+        if (
+            markovResult &&
+            markovResult.prediction !== undefined
+        ) {
+            return markovResult.prediction;
+        }
 
         if (
-            this.modules.learning &&
-            typeof
-            this.modules.learning.analyze ===
-            "function"
+            transitionResult &&
+            transitionResult.prediction !== undefined
         ) {
+            return transitionResult.prediction;
+        }
 
-            try {
+        if (
+            probabilityResult &&
+            probabilityResult.prediction !== undefined
+        ) {
+            return probabilityResult.prediction;
+        }
 
-                this.modules.learning.analyze(
-                    decisionResult
-                );
+        if (
+            patternResult &&
+            patternResult.prediction !== undefined
+        ) {
+            return patternResult.prediction;
+        }
 
-           
+        if (
+            patternResult &&
+            patternResult.hotDigit !== undefined
+        ) {
+            return patternResult.hotDigit;
+        }
+
+        return null;
+    }
+
+    calculateAgreement(results) {
+        const validResults = results.filter(
+            result =>
+                result &&
+                typeof result === "object"
+        );
+
+        if (validResults.length === 0) {
+            return 0;
+        }
+
+        const scores = validResults
+            .map(result =>
+                this.safeNumber(
+                    result.score,
+                    0
+                )
+            );
+
+        const total = scores.reduce(
+            (sum, score) => sum + score,
+            0
+        );
+
+        return this.safeNumber(
+            total / scores.length,
+            0
+        );
+    }
+
+    updateDashboard() {
+        const analysis = this.memory.analysis;
+
+        const set = (id, value) => {
+            const element =
+                document.getElementById(id);
+
+            if (element) {
+                element.textContent =
+                    value;
+            }
+        };
+
+        set(
+            "status",
+            "Connected"
+        );
+
+        set(
+            "market",
+            analysis.market || "R_100"
+        );
+
+        set(
+            "lastDigit",
+            analysis.lastDigit ?? "-"
+        );
+
+        set(
+            "tick",
+            analysis.currentTick ?? "-"
+        );
+
+        set(
+            "pattern",
+            analysis.pattern || "Scanning"
+        );
+
+        set(
+            "probability",
+            this.safeNumber(
+                analysis.probability
+            ) + "%"
+        );
+
+        set(
+            "confidence",
+            this.safeNumber(
+                analysis.confidence
+            ) + "%"
+        );
+
+        set(
+            "prediction",
+            analysis.prediction !== null &&
+            analysis.prediction !== undefined
+                ? "Digit " + analysis.prediction
+                : "Waiting"
+        );
+
+        set(
+            "signal",
+            analysis.signal || "WAIT"
+        );
+
+        set(
+            "recommendation",
+            analysis.recommendation ||
+            "Analyzing..."
+        );
+
+        set(
+            "memory",
+            this.memory.ticks.length +
+            " / " +
+            this.memory.maxTicks
+        );
+
+        set(
+            "time",
+            new Date().toLocaleTimeString()
+        );
+
+        set(
+            "modules",
+            this.countAnalysisModules()
+        );
+    }
+}
+
+window.engine =
+    new AnalysisEngine();
