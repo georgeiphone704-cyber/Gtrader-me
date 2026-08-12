@@ -1,203 +1,483 @@
+/*
+ * MARKOV DIGIT ENGINE
+ * -------------------
+ * Purpose:
+ *   Analyze digit sequences using first-, second-, and third-order
+ *   Markov transitions.
+ *
+ * Important:
+ *   This module is an ANALYSIS module only.
+ *   It does NOT place trades.
+ *
+ * Output:
+ *   - predicted digit
+ *   - model strength
+ *   - confidence score
+ *   - selected Markov order
+ *   - sample count
+ *   - transition evidence
+ *
+ * The final Decision Engine should combine this result with
+ * the other analysis modules before deciding whether to trade.
+ */
+
 class MarkovEngine {
 
     constructor() {
 
+        this.name = "markov";
+
+        // Maximum Markov order.
+        // 1 = previous digit
+        // 2 = previous 2 digits
+        // 3 = previous 3 digits
         this.maxOrder = 3;
+
+        // Minimum observations required before analysis.
         this.minSamples = 30;
+
+        // Maximum amount of recent data used.
+        this.maxSamples = 300;
+
+        // Recent observations receive more weight.
         this.decay = 0.995;
 
-        this.transitions = {
-            1: {},
-            2: {},
-            3: {}
-        };
+        // Minimum effective transition evidence.
+        this.minTransitionEvidence = 3;
+
+        // Small smoothing value prevents zero-probability problems.
+        this.smoothing = 0.25;
 
         this.samples = 0;
+
         this.lastAnalysis = null;
+
+        this.lastDataLength = 0;
     }
 
 
+    /*
+     * Reset the engine.
+     */
     reset() {
 
-        this.transitions = {
-            1: {},
-            2: {},
-            3: {}
-        };
-
         this.samples = 0;
+
         this.lastAnalysis = null;
+
+        this.lastDataLength = 0;
     }
 
 
+    /*
+     * Convert input into valid digits.
+     */
     normalizeDigits(digits) {
 
-        if (!Array.isArray(digits)) return [];
+        if (!Array.isArray(digits)) {
+            return [];
+        }
 
         return digits
             .map(Number)
-            .filter(digit =>
-                Number.isInteger(digit) &&
-                digit >= 0 &&
-                digit <= 9
+            .filter(
+                digit =>
+                    Number.isInteger(digit) &&
+                    digit >= 0 &&
+                    digit <= 9
             );
-
     }
 
 
+    /*
+     * Convert a sequence into a state key.
+     *
+     * Example:
+     * [3]       -> "3"
+     * [3,7]     -> "3,7"
+     * [3,7,1]   -> "3,7,1"
+     */
     getKey(sequence) {
 
         return sequence.join(",");
-
     }
 
 
-    ensureState(order, key) {
+    /*
+     * Create an empty probability state.
+     */
+    createState() {
 
-        if (!this.transitions[order][key]) {
+        return {
+            weights: Array(10).fill(0),
+            total: 0,
+            observations: 0
+        };
+    }
 
-            this.transitions[order][key] =
-                Array(10).fill(0);
 
+    /*
+     * Build transition tables from the current data.
+     *
+     * This deliberately rebuilds from the current window rather than
+     * continuously adding the same historical data again.
+     */
+    buildTransitions(data) {
+
+        const transitions = {
+            1: {},
+            2: {},
+            3: {}
+        };
+
+        const length = data.length;
+
+        if (length < 2) {
+            return transitions;
         }
 
-        return this.transitions[order][key];
+        /*
+         * Process every possible Markov order.
+         */
+        for (
+            let order = 1;
+            order <= this.maxOrder;
+            order++
+        ) {
 
-    }
-
-
-    learn(digits) {
-
-        const data = this.normalizeDigits(digits);
-
-        if (data.length < 2) return;
-
-
-        for (let i = 0; i < data.length; i++) {
+            if (length <= order) {
+                continue;
+            }
 
             for (
-                let order = 1;
-                order <= this.maxOrder;
-                order++
+                let i = order;
+                i < length;
+                i++
             ) {
 
-                if (i < order) continue;
-
-
-                const history =
-                    data.slice(i - order, i);
+                const history = data.slice(
+                    i - order,
+                    i
+                );
 
                 const nextDigit = data[i];
 
-                const key =
-                    this.getKey(history);
+                const key = this.getKey(history);
 
-                const state =
-                    this.ensureState(order, key);
-
-
-                /*
-                 * Apply a small decay to older
-                 * observations before adding the
-                 * newest observation.
-                 */
-
-                for (let d = 0; d < 10; d++) {
-
-                    state[d] *= this.decay;
-
+                if (!transitions[order][key]) {
+                    transitions[order][key] =
+                        this.createState();
                 }
 
+                const state =
+                    transitions[order][key];
 
-                state[nextDigit] += 1;
+                /*
+                 * Newer observations receive more weight.
+                 *
+                 * age = 0 means newest observation.
+                 */
+                const age =
+                    length - 1 - i;
 
+                const weight =
+                    Math.pow(this.decay, age);
+
+                state.weights[nextDigit] += weight;
+
+                state.total += weight;
+
+                state.observations++;
             }
-
         }
 
-
-        this.samples += data.length - 1;
-
+        return transitions;
     }
 
 
-    getPrediction(order, history) {
+    /*
+     * Calculate probability distribution for a state.
+     */
+    calculateProbabilities(state) {
 
-        if (history.length < order) {
-
-            return null;
-
+        if (!state || state.total <= 0) {
+            return Array(10).fill(0);
         }
 
+        const denominator =
+            state.total +
+            (this.smoothing * 10);
+
+        return state.weights.map(
+            weight =>
+                (weight + this.smoothing) /
+                denominator
+        );
+    }
+
+
+    /*
+     * Find strongest digit from a probability distribution.
+     */
+    findBestDigit(probabilities) {
+
+        let bestDigit = 0;
+        let bestProbability = -Infinity;
+
+        for (
+            let digit = 0;
+            digit < 10;
+            digit++
+        ) {
+
+            if (
+                probabilities[digit] >
+                bestProbability
+            ) {
+
+                bestProbability =
+                    probabilities[digit];
+
+                bestDigit = digit;
+            }
+        }
+
+        return {
+            digit: bestDigit,
+            probability: bestProbability
+        };
+    }
+
+
+    /*
+     * Calculate how much stronger the best digit is
+     * compared with the random 10% baseline.
+     *
+     * This is MODEL STRENGTH, not guaranteed win probability.
+     */
+    calculateStrength(
+        probability,
+        evidence
+    ) {
+
+        const baseline = 0.10;
+
+        if (
+            !Number.isFinite(probability) ||
+            probability <= baseline
+        ) {
+            return 0;
+        }
+
+        /*
+         * Normalize excess probability above the 10% baseline.
+         */
+        const rawStrength =
+            (probability - baseline) /
+            (1 - baseline);
+
+        /*
+         * Evidence factor prevents a tiny number of observations
+         * from producing an exaggerated strength.
+         */
+        const evidenceFactor =
+            Math.min(
+                1,
+                evidence / 20
+            );
+
+        const strength =
+            rawStrength *
+            evidenceFactor;
+
+        return Math.max(
+            0,
+            Math.min(1, strength)
+        );
+    }
+
+
+    /*
+     * Calculate confidence.
+     *
+     * This is intentionally conservative.
+     *
+     * Confidence is NOT the probability that the next digit
+     * will actually be correct.
+     */
+    calculateConfidence(
+        strength,
+        evidence
+    ) {
+
+        if (
+            !Number.isFinite(strength) ||
+            strength <= 0
+        ) {
+            return 0;
+        }
+
+        /*
+         * More evidence stabilizes the estimate.
+         */
+        const evidenceFactor =
+            Math.min(
+                1,
+                evidence / 50
+            );
+
+        /*
+         * Keep the base confidence conservative.
+         */
+        const confidence =
+            strength *
+            100 *
+            (
+                0.70 +
+                (0.30 * evidenceFactor)
+            );
+
+        return Math.min(
+            100,
+            Number(confidence.toFixed(2))
+        );
+    }
+
+
+    /*
+     * Get a prediction from a specific Markov order.
+     */
+    getPrediction(
+        order,
+        history,
+        transitions
+    ) {
+
+        if (
+            !Array.isArray(history) ||
+            history.length < order
+        ) {
+            return null;
+        }
 
         const key =
             this.getKey(
                 history.slice(-order)
             );
 
-
         const state =
-            this.transitions[order][key];
+            transitions[order]?.[key];
 
-
-        if (!state) return null;
-
-
-        let total = 0;
-
-        let bestDigit = null;
-
-        let bestWeight = 0;
-
-
-        for (let digit = 0; digit < 10; digit++) {
-
-            total += state[digit];
-
-
-            if (state[digit] > bestWeight) {
-
-                bestWeight = state[digit];
-
-                bestDigit = digit;
-
-            }
-
-        }
-
-
-        if (total <= 0 || bestDigit === null) {
-
+        if (!state) {
             return null;
-
         }
 
+        /*
+         * Avoid trusting a state with almost no evidence.
+         */
+        if (
+            state.observations < 2 ||
+            state.total <= 0
+        ) {
+            return null;
+        }
+
+        const probabilities =
+            this.calculateProbabilities(state);
+
+        const best =
+            this.findBestDigit(
+                probabilities
+            );
+
+        const strength =
+            this.calculateStrength(
+                best.probability,
+                state.observations
+            );
 
         return {
 
-            digit: bestDigit,
+            digit: best.digit,
+
+            probability:
+                Number(
+                    (
+                        best.probability * 100
+                    ).toFixed(2)
+                ),
 
             strength:
-                (bestWeight / total) * 100,
+                Number(
+                    (
+                        strength * 100
+                    ).toFixed(2)
+                ),
 
-            total
+            evidence:
+                state.observations,
 
+            totalWeight:
+                Number(
+                    state.total.toFixed(4)
+                ),
+
+            probabilities:
+                probabilities.map(
+                    value =>
+                        Number(
+                            (
+                                value * 100
+                            ).toFixed(2)
+                        )
+                ),
+
+            order,
+
+            key
         };
-
     }
 
 
+    /*
+     * Learn/build the model.
+     *
+     * Unlike the previous implementation, this does not repeatedly
+     * accumulate the same historical ticks every time analyze()
+     * runs.
+     */
+    learn(digits) {
+
+        const data =
+            this.normalizeDigits(digits)
+                .slice(-this.maxSamples);
+
+        this.samples = data.length;
+
+        return this.buildTransitions(data);
+    }
+
+
+    /*
+     * Main analysis function.
+     */
     analyze(digits = []) {
 
         const data =
-            this.normalizeDigits(digits);
+            this.normalizeDigits(digits)
+                .slice(-this.maxSamples);
 
+        /*
+         * Not enough data.
+         */
+        if (
+            data.length <
+            this.minSamples
+        ) {
 
-        if (data.length < 2) {
+            const result = {
 
-            return {
-
-                module: "markov",
+                module: this.name,
 
                 success: false,
 
@@ -207,41 +487,42 @@ class MarkovEngine {
 
                 order: 0,
 
-                samples: this.samples,
+                samples: data.length,
 
-                reason: "Insufficient digit data"
+                strength: 0,
 
+                confidence: 0,
+
+                evidence: 0,
+
+                reason:
+                    "Insufficient digit data",
+
+                recommendation:
+                    "COLLECTING DATA"
             };
 
+            this.lastAnalysis =
+                result;
+
+            return result;
         }
 
 
         /*
-         * Learn only the newest observations.
-         * This prevents repeatedly counting the
-         * entire memory every analysis cycle.
+         * Build a fresh model from the current
+         * analysis window.
          */
-
-        const learningWindow =
-            data.slice(
-                Math.max(
-                    0,
-                    data.length - 100
-                )
-            );
-
-
-        this.learn(learningWindow);
+        const transitions =
+            this.learn(data);
 
 
         /*
-         * Prefer the highest available order.
-         * Fall back to lower orders when there
-         * isn't enough transition data.
+         * Try the strongest available model first.
+         *
+         * Order 3 → Order 2 → Order 1.
          */
-
-        let result = null;
-
+        let prediction = null;
 
         for (
             let order = this.maxOrder;
@@ -249,40 +530,35 @@ class MarkovEngine {
             order--
         ) {
 
-            const prediction =
+            prediction =
                 this.getPrediction(
                     order,
-                    data
+                    data,
+                    transitions
                 );
-
 
             if (
                 prediction &&
-                prediction.total >= 2
+                prediction.evidence >=
+                this.minTransitionEvidence
             ) {
-
-                result = {
-
-                    ...prediction,
-
-                    order
-
-                };
-
                 break;
-
             }
 
+            prediction = null;
         }
 
 
-        if (!result) {
+        /*
+         * No usable prediction.
+         */
+        if (!prediction) {
 
-            return {
+            const result = {
 
-                module: "markov",
+                module: this.name,
 
-                success: false,
+                success: true,
 
                 score: 0,
 
@@ -290,64 +566,159 @@ class MarkovEngine {
 
                 order: 0,
 
-                samples: this.samples,
+                samples: data.length,
 
-                reason: "Insufficient transition history"
+                strength: 0,
 
+                confidence: 0,
+
+                evidence: 0,
+
+                reason:
+                    "No sufficiently supported transition",
+
+                recommendation:
+                    "WAIT"
             };
 
+            this.lastAnalysis =
+                result;
+
+            return result;
         }
 
 
         /*
-         * Don't call a weak statistical preference
-         * a strong signal.
-         *
-         * The score is a model-strength score,
-         * not a guaranteed probability of the next
-         * digit occurring.
+         * Determine model score.
          */
-
         const score =
-            Math.max(
-                0,
-                Math.min(
-                    100,
-                    Math.round(result.strength)
-                )
-            );
+            prediction.strength;
 
 
-        const analysis = {
+        /*
+         * Conservative recommendation.
+         *
+         * IMPORTANT:
+         * This does not mean "place a trade".
+         * It only describes the Markov module's signal.
+         */
+        let recommendation =
+            "WEAK SIGNAL";
 
-            module: "markov",
+        if (
+            prediction.confidence >= 85 &&
+            prediction.strength >= 60
+        ) {
+
+            recommendation =
+                "STRONG SIGNAL";
+
+        } else if (
+            prediction.confidence >= 70 &&
+            prediction.strength >= 40
+        ) {
+
+            recommendation =
+                "WATCH SIGNAL";
+
+        } else if (
+            prediction.strength < 20
+        ) {
+
+            recommendation =
+                "WAIT";
+        }
+
+
+        /*
+         * Final module result.
+         */
+        const result = {
+
+            module: this.name,
 
             success: true,
 
-            prediction: result.digit,
+            score:
 
-            score,
-
-            order: result.order,
-
-            samples: this.samples,
-
-            transitionStrength:
                 Number(
-                    result.strength.toFixed(2)
-                )
+                    score.toFixed(2)
+                ),
 
+            prediction: {
+
+                digit:
+                    prediction.digit,
+
+                probability:
+                    prediction.probability,
+
+                strength:
+                    prediction.strength,
+
+                order:
+                    prediction.order
+            },
+
+            /*
+             * Convenient top-level fields for
+             * the Decision Engine / Dashboard.
+             */
+            digit:
+                prediction.digit,
+
+            order:
+                prediction.order,
+
+            strength:
+                prediction.strength,
+
+            confidence:
+                prediction.confidence,
+
+            evidence:
+                prediction.evidence,
+
+            samples:
+                data.length,
+
+            transitionWeight:
+                prediction.totalWeight,
+
+            probabilities:
+                prediction.probabilities,
+
+            recommendation,
+
+            reason:
+                `Markov order ${prediction.order} selected with ${prediction.evidence} supported observations`
         };
 
 
-        this.lastAnalysis = analysis;
+        this.lastAnalysis =
+            result;
 
-        return analysis;
+        this.lastDataLength =
+            data.length;
 
+        return result;
     }
 
+
+    /*
+     * Return the most recent analysis.
+     */
+    getResult() {
+
+        return this.lastAnalysis;
+    }
 }
 
 
-window.markovEngine =
-    new MarkovEngine();
+/*
+ * Expose globally so the website can use:
+ *
+ * window.MarkovEngine
+ */
+window.MarkovEngine =
+    MarkovEngine;
