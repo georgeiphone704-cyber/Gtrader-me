@@ -2,107 +2,656 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Deriv Digits AI</title>
 
-    <link rel="stylesheet" href="style.css">
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>GTRADER-ME</title>
+
+    <link
+        rel="stylesheet"
+        href="style.css"
+    >
 </head>
 
 <body>
 
-<header>
-    <h1>Deriv Digits AI</h1>
-</header>
+<div class="app">
 
-<div class="container">
+    <!-- =====================================================
+         HEADER
+         ===================================================== -->
 
-<div class="card">
-    <h2>Status</h2>
-    <p id="status">Connecting...</p>
+    <header class="topbar">
+
+        <div class="brand">
+
+            <div class="g-logo">
+                G
+            </div>
+
+            <div>
+
+                <div class="brand-name">
+                    GTRADER<span>-ME</span>
+                </div>
+
+                <div class="brand-subtitle">
+                    AI DIGIT ANALYSIS SYSTEM
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <div class="connection">
+
+            <span class="connection-dot"></span>
+
+            <span id="connectionStatus">
+                Disconnected
+            </span>
+
+        </div>
+
+    </header>
+
+
+    <!-- =====================================================
+         DASHBOARD
+         ===================================================== -->
+
+    <main class="dashboard-grid">
+
+
+        <!-- =================================================
+             MARKET
+             ================================================= -->
+
+        <section class="panel">
+
+            <div class="panel-title">
+                Market
+            </div>
+
+            <div class="market-area">
+
+                <select
+                    id="marketSelector"
+                    class="market-selector"
+                >
+
+                    <option value="R_10">
+                        Volatility 10 Index
+                    </option>
+
+                    <option value="1HZ10V">
+                        Volatility 10 (1s)
+                    </option>
+
+                    <option value="R_25">
+                        Volatility 25 Index
+                    </option>
+
+                    <option value="1HZ25V">
+                        Volatility 25 (1s)
+                    </option>
+
+                    <option value="R_50">
+                        Volatility 50 Index
+                    </option>
+
+                    <option value="1HZ50V">
+                        Volatility 50 (1s)
+                    </option>
+
+                    <option value="R_75">
+                        Volatility 75 Index
+                    </option>
+
+                    <option value="1HZ75V">
+                        Volatility 75 (1s)
+                    </option>
+
+                    <option value="R_100">
+                        Volatility 100 Index
+                    </option>
+
+                    <option value="1HZ100V">
+                        Volatility 100 (1s)
+                    </option>
+
+                </select>
+
+
+                <div class="market-symbol">
+
+                    <span
+                        id="marketName"
+                        class="market-name"
+                    >
+                        Volatility 10 Index
+                    </span>
+
+                    <span
+                        id="marketState"
+                        class="market-status"
+                    >
+                        READY
+                    </span>
+
+                </div>
+
+            </div>
+
+        </section>
+
+
+        <!-- =================================================
+             LIVE TICK
+             ================================================= -->
+
+        <section class="panel">
+
+            <div class="panel-title">
+                Live Market
+            </div>
+
+
+            <div class="live-grid">
+
+                <div class="data-box">
+
+                    <div class="data-label">
+                        Last Digit
+                    </div>
+
+                    <div
+                        id="lastDigit"
+                        class="data-value digit"
+                    >
+                        -
+                    </div>
+
+                </div>
+
+
+                <div class="data-box">
+
+                    <div class="data-label">
+                        Quote
+                    </div>
+
+                    <div
+                        id="currentQuote"
+                        class="data-value"
+                    >
+                        -
+                    </div>
+
+                </div>
+
+
+                <div class="data-box">
+
+                    <div class="data-label">
+                        Ticks
+                    </div>
+
+                    <div
+                        id="tickCount"
+                        class="data-value"
+                    >
+                        0
+                    </div>
+
+                </div>
+
+
+                <div class="data-box">
+
+                    <div class="data-label">
+                        Memory
+                    </div>
+
+                    <div
+                        id="memoryCount"
+                        class="data-value"
+                    >
+                        0 / 10000
+                    </div>
+
+                </div>
+
+            </div>
+
+        </section>
+
+
+        <!-- =================================================
+             PREDICTION
+             ================================================= -->
+
+        <section class="panel">
+
+            <div class="panel-title">
+                AI Prediction
+            </div>
+
+
+            <div class="prediction">
+
+                <div class="prediction-label">
+                    Predicted Digit
+                </div>
+
+
+                <div
+                    id="prediction"
+                    class="prediction-digit"
+                >
+                    -
+                </div>
+
+
+                <div
+                    id="confidence"
+                    class="confidence"
+                >
+                    0%
+                </div>
+
+
+                <div
+                    id="signal"
+                    class="signal"
+                >
+                    WAIT
+                </div>
+
+            </div>
+
+        </section>
+
+
+        <!-- =================================================
+             DECISION
+             ================================================= -->
+
+        <section class="panel">
+
+            <div class="panel-title">
+                Engine Decision
+            </div>
+
+
+            <div class="decision">
+
+                <div
+                    id="decisionStatus"
+                    class="decision-status"
+                >
+                    WAITING
+                </div>
+
+
+                <div
+                    id="decisionNote"
+                    class="decision-note"
+                >
+                    Waiting for sufficient market data.
+                </div>
+
+            </div>
+
+        </section>
+
+
+        <!-- =================================================
+             ANALYSIS MODULES
+             ================================================= -->
+
+        <section class="panel full">
+
+            <div class="panel-title">
+                Analysis Modules
+            </div>
+
+
+            <div id="modulesContainer">
+
+
+                <div class="module">
+
+                    <div class="module-head">
+
+                        <span class="module-name">
+                            Pattern Analysis
+                        </span>
+
+                        <span
+                            id="patternValue"
+                            class="module-value"
+                        >
+                            0%
+                        </span>
+
+                    </div>
+
+                    <div class="module-bar">
+
+                        <div
+                            id="patternBar"
+                            class="module-fill"
+                        ></div>
+
+                    </div>
+
+                </div>
+
+
+                <div class="module">
+
+                    <div class="module-head">
+
+                        <span class="module-name">
+                            Probability
+                        </span>
+
+                        <span
+                            id="probabilityValue"
+                            class="module-value"
+                        >
+                            0%
+                        </span>
+
+                    </div>
+
+                    <div class="module-bar">
+
+                        <div
+                            id="probabilityBar"
+                            class="module-fill"
+                        ></div>
+
+                    </div>
+
+                </div>
+
+
+                <div class="module">
+
+                    <div class="module-head">
+
+                        <span class="module-name">
+                            Statistics
+                        </span>
+
+                        <span
+                            id="statisticsValue"
+                            class="module-value"
+                        >
+                            0%
+                        </span>
+
+                    </div>
+
+                    <div class="module-bar">
+
+                        <div
+                            id="statisticsBar"
+                            class="module-fill"
+                        ></div>
+
+                    </div>
+
+                </div>
+
+
+                <div class="module">
+
+                    <div class="module-head">
+
+                        <span class="module-name">
+                            Transition
+                        </span>
+
+                        <span
+                            id="transitionValue"
+                            class="module-value"
+                        >
+                            0%
+                        </span>
+
+                    </div>
+
+                    <div class="module-bar">
+
+                        <div
+                            id="transitionBar"
+                            class="module-fill"
+                        ></div>
+
+                    </div>
+
+                </div>
+
+
+                <div class="module">
+
+                    <div class="module-head">
+
+                        <span class="module-name">
+                            Markov
+                        </span>
+
+                        <span
+                            id="markovValue"
+                            class="module-value"
+                        >
+                            0%
+                        </span>
+
+                    </div>
+
+                    <div class="module-bar">
+
+                        <div
+                            id="markovBar"
+                            class="module-fill"
+                        ></div>
+
+                    </div>
+
+                </div>
+
+
+                <div class="module">
+
+                    <div class="module-head">
+
+                        <span class="module-name">
+                            Cycle Detection
+                        </span>
+
+                        <span
+                            id="cycleValue"
+                            class="module-value"
+                        >
+                            0%
+                        </span>
+
+                    </div>
+
+                    <div class="module-bar">
+
+                        <div
+                            id="cycleBar"
+                            class="module-fill"
+                        ></div>
+
+                    </div>
+
+                </div>
+
+
+            </div>
+
+        </section>
+
+
+        <!-- =================================================
+             CONTROLS
+             ================================================= -->
+
+        <section class="panel">
+
+            <div class="panel-title">
+                Engine Controls
+            </div>
+
+
+            <div class="controls">
+
+                <button
+                    id="startButton"
+                    class="start"
+                >
+                    START
+                </button>
+
+
+                <button
+                    id="pauseButton"
+                    class="pause"
+                >
+                    PAUSE
+                </button>
+
+
+                <button
+                    id="stopButton"
+                    class="stop"
+                >
+                    STOP
+                </button>
+
+            </div>
+
+        </section>
+
+
+        <!-- =================================================
+             ENGINE STATUS
+             ================================================= -->
+
+        <section class="panel">
+
+            <div class="panel-title">
+                Engine Status
+            </div>
+
+
+            <div class="decision">
+
+                <div
+                    id="engineStatus"
+                    class="decision-status"
+                >
+                    OFFLINE
+                </div>
+
+
+                <div
+                    id="recommendation"
+                    class="decision-note"
+                >
+                    Engine is waiting to start.
+                </div>
+
+            </div>
+
+        </section>
+
+
+        <!-- =================================================
+             HISTORY
+             ================================================= -->
+
+        <section class="panel full">
+
+            <div class="panel-title">
+                Paper Trade History
+            </div>
+
+
+            <div
+                id="history"
+                class="history"
+            >
+
+                <div class="history-row">
+
+                    <span>
+                        Time
+                    </span>
+
+                    <span>
+                        Market
+                    </span>
+
+                    <span>
+                        Prediction
+                    </span>
+
+                    <span>
+                        Result
+                    </span>
+
+                </div>
+
+            </div>
+
+        </section>
+
+
+    </main>
+
+
+    <!-- =====================================================
+         FOOTER
+         ===================================================== -->
+
+    <footer class="footer">
+
+        <span>
+            GTRADER-ME
+        </span>
+
+        <span class="footer-brand">
+            DIGIT ANALYSIS ENGINE
+        </span>
+
+    </footer>
+
 </div>
 
-<div class="card">
-    <h2>Market</h2>
-    <p id="market">R_100</p>
-</div>
 
-<div class="card">
-    <h2>Last Digit</h2>
-    <p id="lastDigit">-</p>
-</div>
+<!-- =========================================================
+     JAVASCRIPT
+     ========================================================= -->
 
-<div class="card">
-    <h2>Current Tick</h2>
-    <p id="tick">-</p>
-</div>
+<script src="market.js"></script>
 
-<div class="card">
-    <h2>Pattern</h2>
-    <p id="pattern">Scanning...</p>
-</div>
-
-<div class="card">
-    <h2>Probability</h2>
-    <p id="probability">0%</p>
-</div>
-
-<div class="card">
-    <h2>Confidence</h2>
-    <p id="confidence">0%</p>
-</div>
-
-<div class="card">
-    <h2>Prediction</h2>
-    <p id="prediction">Waiting...</p>
-</div>
-
-<div class="card">
-    <h2>Signal</h2>
-    <p id="signal">NONE</p>
-</div>
-
-<div class="card">
-    <h2>Recommendation</h2>
-    <p id="recommendation">Analyzing...</p>
-</div>
-
-<div class="card">
-    <h2>Memory</h2>
-    <p id="memory">0 / 10000</p>
-</div>
-
-<div class="card">
-    <h2>Time</h2>
-    <p id="time">--:--:--</p>
-                      </div>
-    </div>
-
-    <div class="card">
-        <h2>Market</h2>
-        <p id="market">Digits</p>
-    </div>
-
-    <div class="card">
-        <h2>Confidence</h2>
-        <p id="confidence">0%</p>
-    </div>
-
-    <div class="card">
-        <h2>Prediction</h2>
-        <p id="prediction">Waiting...</p>
-    </div>
-
-    <div class="card">
-        <h2>Time</h2>
-        <p id="time">--:--:--</p>
-    </div>
-
-</div>
-
-<script src="decision.js"<>/script>
-<script src="analysis/engine.js"></script>
 <script src="deriv.js"></script>
+
+<script src="engine.js"></script>
+
 <script src="script.js"></script>
 
+
 </body>
-</html>
+    </html>
