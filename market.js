@@ -1,661 +1,230 @@
 /*
  * ============================================================
- * MARKET MANAGER
- * ============================================================
- * Handles the 10 supported Deriv volatility markets.
+ * GTRADER-ME MARKETS CONFIGURATION
  * ============================================================
  */
 
-class MarketManager {
+(function (global) {
+    "use strict";
 
-    constructor() {
+    const DIGIT_MARKETS = [
+        {
+            symbol: "R_10",
+            name: "Volatility 10 Index",
+            shortName: "V10",
+            family: "volatility",
+            oneSecond: false,
+            digits: true
+        },
+        {
+            symbol: "R_25",
+            name: "Volatility 25 Index",
+            shortName: "V25",
+            family: "volatility",
+            oneSecond: false,
+            digits: true
+        },
+        {
+            symbol: "R_50",
+            name: "Volatility 50 Index",
+            shortName: "V50",
+            family: "volatility",
+            oneSecond: false,
+            digits: true
+        },
+        {
+            symbol: "R_75",
+            name: "Volatility 75 Index",
+            shortName: "V75",
+            family: "volatility",
+            oneSecond: false,
+            digits: true
+        },
+        {
+            symbol: "R_100",
+            name: "Volatility 100 Index",
+            shortName: "V100",
+            family: "volatility",
+            oneSecond: false,
+            digits: true
+        },
+        {
+            symbol: "1HZ10V",
+            name: "Volatility 10 (1s) Index",
+            shortName: "V10 1s",
+            family: "volatility_1s",
+            oneSecond: true,
+            digits: true
+        },
+        {
+            symbol: "1HZ25V",
+            name: "Volatility 25 (1s) Index",
+            shortName: "V25 1s",
+            family: "volatility_1s",
+            oneSecond: true,
+            digits: true
+        },
+        {
+            symbol: "1HZ50V",
+            name: "Volatility 50 (1s) Index",
+            shortName: "V50 1s",
+            family: "volatility_1s",
+            oneSecond: true,
+            digits: true
+        },
+        {
+            symbol: "1HZ75V",
+            name: "Volatility 75 (1s) Index",
+            shortName: "V75 1s",
+            family: "volatility_1s",
+            oneSecond: true,
+            digits: true
+        },
+        {
+            symbol: "1HZ100V",
+            name: "Volatility 100 (1s) Index",
+            shortName: "V100 1s",
+            family: "volatility_1s",
+            oneSecond: true,
+            digits: true
+        }
+    ];
 
-        this.markets = [
-            "R_10",
-            "R_25",
-            "R_50",
-            "R_75",
-            "R_100",
+    const MARKET_MAP = {};
 
-            "1HZ10V",
-            "1HZ25V",
-            "1HZ50V",
-            "1HZ75V",
-            "1HZ100V"
-        ];
-
-        this.activeMarket = "R_100";
-
-        this.listeners = [];
-
-        this.marketStates = {};
-
-        this.initializeMarkets();
-
+    for (const market of DIGIT_MARKETS) {
+        MARKET_MAP[market.symbol] = market;
     }
 
-
-    /*
-     * ------------------------------------------------------------
-     * INITIALIZE MARKETS
-     * ------------------------------------------------------------
-     */
-
-    initializeMarkets() {
-
-        for (
-            const market of this.markets
-        ) {
-
-            this.marketStates[market] = {
-
-                symbol: market,
-
-                active: (
-                    market ===
-                    this.activeMarket
-                ),
-
-                ticks: 0,
-
-                lastDigit: null,
-
-                lastQuote: null,
-
-                confidence: 0,
-
-                probability: 0,
-
-                prediction: null,
-
-                signal: "WAIT",
-
-                recommendation:
-                    "Waiting"
-
-            };
-
-        }
-
+    function getMarkets() {
+        return DIGIT_MARKETS.map(
+            market => ({ ...market })
+        );
     }
 
-
-    /*
-     * ------------------------------------------------------------
-     * GET ALL MARKETS
-     * ------------------------------------------------------------
-     */
-
-    getMarkets() {
-
-        return [
-            ...this.markets
-        ];
-
-    }
-
-
-    /*
-     * ------------------------------------------------------------
-     * GET ACTIVE MARKET
-     * ------------------------------------------------------------
-     */
-
-    getActiveMarket() {
-
-        return this.activeMarket;
-
-    }
-
-
-    /*
-     * ------------------------------------------------------------
-     * CHANGE ACTIVE MARKET
-     * ------------------------------------------------------------
-     */
-
-    setMarket(
-        market
-    ) {
-
-        if (
-            !this.markets.includes(
-                market
-            )
-        ) {
-
-            return {
-
-                success: false,
-
-                reason:
-                    "Market not supported"
-
-            };
-
+    function getMarket(symbol) {
+        if (!MARKET_MAP[symbol]) {
+            return null;
         }
-
-
-        /*
-         * Remove active flag
-         * from previous market.
-         */
-
-        for (
-            const symbol of
-            this.markets
-        ) {
-
-            this.marketStates[
-                symbol
-            ].active = false;
-
-        }
-
-
-        this.activeMarket =
-            market;
-
-
-        this.marketStates[
-            market
-        ].active = true;
-
-
-        /*
-         * Tell the engine.
-         */
-
-        if (
-            window.engine &&
-            typeof
-            window.engine.setMarket ===
-            "function"
-        ) {
-
-            window.engine.setMarket(
-                market
-            );
-
-        }
-
-
-        this.emit();
-
 
         return {
-
-            success: true,
-
-            market
-
+            ...MARKET_MAP[symbol]
         };
-
     }
 
-
-    /*
-     * ------------------------------------------------------------
-     * UPDATE MARKET STATE
-     * ------------------------------------------------------------
-     */
-
-    updateMarket(
-        market,
-        data
-    ) {
-
-        if (
-            !this.marketStates[
-                market
-            ]
-        ) {
-
-            return false;
-
-        }
-
-
-        this.marketStates[
-            market
-        ] = {
-
-            ...this.marketStates[
-                market
-            ],
-
-            ...data,
-
-            symbol:
-                market
-
-        };
-
-
-        this.emit();
-
-
-        return true;
-
-    }
-
-
-    /*
-     * ------------------------------------------------------------
-     * GET MARKET STATE
-     * ------------------------------------------------------------
-     */
-
-    getMarketState(
-        market
-    ) {
-
-        return this.marketStates[
-            market
-        ]
-            ? {
-                ...this.marketStates[
-                    market
-                ]
-            }
-            : null;
-
-    }
-
-
-    /*
-     * ------------------------------------------------------------
-     * GET ALL STATES
-     * ------------------------------------------------------------
-     */
-
-    getAllMarketStates() {
-
-        const result = {};
-
-
-        for (
-            const market of
-            this.markets
-        ) {
-
-            result[market] =
-                this.getMarketState(
-                    market
-                );
-
-        }
-
-
-        return result;
-
-    }
-
-
-    /*
-     * ------------------------------------------------------------
-     * TICK UPDATE
-     * ------------------------------------------------------------
-     */
-
-    receiveTick(
-        tick
-    ) {
-
-        if (
-            !tick
-        ) {
-
-            return;
-
-        }
-
-
-        const market =
-            tick.symbol ||
-            tick.market;
-
-
-        if (
-            !market
-        ) {
-
-            return;
-
-        }
-
-
-        /*
-         * Automatically register
-         * a future market if needed.
-         */
-
-        if (
-            !this.marketStates[
-                market
-            ]
-        ) {
-
-            this.markets.push(
-                market
-            );
-
-
-            this.marketStates[
-                market
-            ] = {
-
-                symbol: market,
-
-                active: false,
-
-                ticks: 0,
-
-                lastDigit: null,
-
-                lastQuote: null,
-
-                confidence: 0,
-
-                probability: 0,
-
-                prediction: null,
-
-                signal: "WAIT",
-
-                recommendation:
-                    "Waiting"
-
-            };
-
-        }
-
-
-        const state =
-            this.marketStates[
-                market
-            ];
-
-
-        state.ticks++;
-
-        state.lastQuote =
-            tick.quote ??
-            state.lastQuote;
-
-        state.lastDigit =
-            tick.digit ??
-            state.lastDigit;
-
-
-        this.emit();
-
-    }
-
-
-    /*
-     * ------------------------------------------------------------
-     * SYNC WITH ENGINE
-     * ------------------------------------------------------------
-     */
-
-    syncWithEngine() {
-
-        if (
-            !window.engine ||
-            typeof
-            window.engine.getAllMarketStates !==
-            "function"
-        ) {
-
-            return;
-
-        }
-
-
-        const engineStates =
-            window.engine.getAllMarketStates();
-
-
-        for (
-            const market of
-            Object.keys(
-                engineStates
-            )
-        ) {
-
-            const state =
-                engineStates[
-                    market
-                ];
-
-
-            this.updateMarket(
-                market,
-                {
-
-                    ticks:
-                        state.tickCount,
-
-                    lastDigit:
-                        state.lastDigit,
-
-                    lastQuote:
-                        state.currentTick,
-
-                    confidence:
-                        state.confidence,
-
-                    probability:
-                        state.probability,
-
-                    prediction:
-                        state.prediction,
-
-                    signal:
-                        state.signal,
-
-                    recommendation:
-                        state.recommendation
-
-                }
-            );
-
-        }
-
-    }
-
-
-    /*
-     * ------------------------------------------------------------
-     * MARKET STATUS
-     * ------------------------------------------------------------
-     */
-
-    getStatus(
-        market
-    ) {
-
-        const state =
-            this.marketStates[
-                market
-            ];
-
-
-        if (!state) {
-
-            return "UNKNOWN";
-
-        }
-
-
-        if (
-            state.signal ===
-            "TRADE"
-        ) {
-
-            return "TRADE";
-
-        }
-
-
-        if (
-            state.ticks === 0
-        ) {
-
-            return "WAITING";
-
-        }
-
-
-        return "ANALYZING";
-
-    }
-
-
-    /*
-     * ------------------------------------------------------------
-     * LISTENER
-     * ------------------------------------------------------------
-     */
-
-    onUpdate(
-        callback
-    ) {
-
-        if (
-            typeof callback !==
-            "function"
-        ) {
-
-            return () => {};
-
-        }
-
-
-        this.listeners.push(
-            callback
+    function getSymbols() {
+        return DIGIT_MARKETS.map(
+            market => market.symbol
         );
-
-
-        return () => {
-
-            this.listeners =
-                this.listeners.filter(
-                    listener =>
-                        listener !==
-                        callback
-                );
-
-        };
-
     }
 
+    function isSupportedMarket(symbol) {
+        return Boolean(
+            MARKET_MAP[symbol]
+        );
+    }
 
-    /*
-     * ------------------------------------------------------------
-     * EMIT
-     * ------------------------------------------------------------
-     */
+    function getStandardMarkets() {
+        return DIGIT_MARKETS.filter(
+            market =>
+                !market.oneSecond
+        );
+    }
 
-    emit() {
+    function getOneSecondMarkets() {
+        return DIGIT_MARKETS.filter(
+            market =>
+                market.oneSecond
+        );
+    }
 
-        const state = {
+    function getDigitMarkets() {
+        return DIGIT_MARKETS.filter(
+            market =>
+                market.digits
+        );
+    }
 
-            activeMarket:
-                this.activeMarket,
+    function rankMarketForAnalysis(
+        state = {}
+    ) {
+        const confidence =
+            Number(state.confidence) || 0;
 
-            markets:
-                this.getAllMarketStates()
+        const stability =
+            Number(state.stability) || 0;
 
-        };
+        const agreement =
+            Number(state.agreement) || 0;
 
+        const sampleSize =
+            Number(state.sampleSize) || 0;
+
+        return (
+            confidence * 0.45 +
+            stability * 0.20 +
+            agreement * 0.20 +
+            Math.min(
+                sampleSize,
+                200
+            ) * 0.15
+        );
+    }
+
+    function selectBestMarket(
+        marketStates = {}
+    ) {
+        let bestMarket = null;
+        let bestScore = -Infinity;
 
         for (
-            const listener of
-            this.listeners
+            const symbol of getSymbols()
         ) {
+            const state =
+                marketStates[symbol];
 
-            try {
+            if (!state) {
+                continue;
+            }
 
-                listener(
+            const score =
+                rankMarketForAnalysis(
                     state
                 );
 
-            } catch (error) {
-
-                console.warn(
-                    "Market listener error:",
-                    error
-                );
-
+            if (
+                score > bestScore
+            ) {
+                bestScore = score;
+                bestMarket = symbol;
             }
-
         }
 
+        return bestMarket;
     }
 
-}
+    const api = {
+        DIGIT_MARKETS,
+        getMarkets,
+        getMarket,
+        getSymbols,
+        getStandardMarkets,
+        getOneSecondMarkets,
+        getDigitMarkets,
+        isSupportedMarket,
+        rankMarketForAnalysis,
+        selectBestMarket
+    };
 
+    global.GTraderMarkets = api;
 
-/*
- * ============================================================
- * GLOBAL EXPORT
- * ============================================================
- */
+    if (
+        typeof module !== "undefined" &&
+        module.exports
+    ) {
+        module.exports = api;
+    }
 
-window.MarketManager =
-    MarketManager;
-
-
-window.marketManager =
-    new MarketManager();
-
-
-/*
- * ============================================================
- * CONNECT DERIV TICKS
- * ============================================================
- */
-
-if (
-    window.derivFeed &&
-    typeof
-    window.derivFeed.onTick ===
-    "function"
-) {
-
-    window.derivFeed.onTick(
-        tick => {
-
-            window.marketManager.receiveTick(
-                tick
-            );
-
-        }
-    );
-
-}
-
-
-/*
- * ============================================================
- * PERIODIC ENGINE SYNC
- * ============================================================
- */
-
-setInterval(
-    () => {
-
-        if (
-            window.marketManager
-        ) {
-
-            window.marketManager
-                .syncWithEngine();
-
-        }
-
-    },
-    500
-);
+})(typeof window !== "undefined"
+    ? window
+    : globalThis);
