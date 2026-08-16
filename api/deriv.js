@@ -1,1097 +1,961 @@
 /*
  * ============================================================
- * GTRADER-ME DERIV MARKET DATA FEED
+ * GTRADER-ME DERIV CONNECTION
  * ============================================================
  *
- * Connects to Deriv's public market-data WebSocket.
+ * PURPOSE:
+ * - Connect to Deriv through WebSocket
+ * - Subscribe to live ticks
+ * - Convert tick data into the format expected by engine.js
+ * - Send every valid tick to AnalysisEngine
  *
- * Supported volatility markets:
- *
- * R_10
- * R_25
- * R_50
- * R_75
- * R_100
- *
- * 1HZ10V
- * 1HZ25V
- * 1HZ50V
- * 1HZ75V
- * 1HZ100V
- *
- * Responsibilities:
- * - connect to Deriv public market data
- * - subscribe to configured volatility markets
- * - receive live ticks
- * - maintain per-market feed state
- * - forward ticks to market.js
- * - forward ticks to engine.js
- * - reconnect after connection loss
- *
- * This file DOES NOT place trades.
+ * IMPORTANT:
+ * - This file does NOT place trades.
+ * - It only receives market data.
  * ============================================================
  */
 
-class DerivFeed {
+(function (global) {
+    "use strict";
 
-    constructor(options = {}) {
+    class DerivConnection {
 
-        /* =====================================================
-         * CONFIGURATION
-         * ===================================================== */
+        constructor(options = {}) {
 
-        this.appId =
-            options.appId || "";
+            this.appId =
+                options.appId ||
+                "";
 
-        /*
-         * All requested volatility markets.
-         */
-        this.markets =
-            Array.isArray(options.markets) &&
-            options.markets.length
-                ? [...options.markets]
-                : [
-                    "R_10",
-                    "R_25",
-                    "R_50",
-                    "R_75",
-                    "R_100",
-                    "1HZ10V",
-                    "1HZ25V",
-                    "1HZ50V",
-                    "1HZ75V",
-                    "1HZ100V"
-                ];
+            this.token =
+                options.token ||
+                "";
 
+            this.engine =
+                options.engine ||
+                global.engine ||
+                null;
 
-        /* =====================================================
-         * CONNECTION
-         * ===================================================== */
+            this.markets =
+                options.markets ||
+                (
+                    global.GTraderMarkets &&
+                    typeof global.GTraderMarkets.getSymbols ===
+                    "function"
+                )
+                    ? global.GTraderMarkets.getSymbols()
+                    : [
+                        "R_10",
+                        "R_25",
+                        "R_50",
+                        "R_75",
+                        "R_100",
+                        "1HZ10V",
+                        "1HZ25V",
+                        "1HZ50V",
+                        "1HZ75V",
+                        "1HZ100V"
+                    ];
 
-        this.ws = null;
+            this.ws = null;
 
-        this.connected = false;
+            this.connected = false;
 
-        this.connecting = false;
+            this.authorized = false;
 
-        this.shouldReconnect = true;
+            this.subscriptions = {};
 
-        this.reconnectTimer = null;
+            this.reconnectTimer = null;
 
-        this.reconnectDelay = 2000;
+            this.reconnectAttempts = 0;
 
-        this.maxReconnectDelay = 30000;
+            this.maxReconnectAttempts =
+                Number(
+                    options.maxReconnectAttempts
+                ) || 10;
 
+            this.reconnectDelay =
+                Number(
+                    options.reconnectDelay
+                ) || 3000;
 
-        /* =====================================================
-         * REQUESTS / SUBSCRIPTIONS
-         * ===================================================== */
+            this.listeners = [];
 
-        this.requestId = 0;
+            this.lastTick = null;
 
-        this.subscriptions = {};
+            this.lastError = null;
 
-        this.subscriptionIds = {};
-
-
-        /* =====================================================
-         * PER-MARKET FEED STATE
-         * ===================================================== */
-
-        this.marketState = {};
-
-        for (
-            const market of this.markets
-        ) {
-            this.marketState[market] =
-                this.createMarketState(market);
+            this.status =
+                "Disconnected";
         }
-
-
-        /* =====================================================
-         * LISTENERS
-         * ===================================================== */
-
-        this.tickListeners = [];
-
-        this.statusListeners = [];
-
-        this.errorListeners = [];
-
-    }
-
-
-    /* ==========================================================
-     * CREATE MARKET STATE
-     * ========================================================== */
-
-    createMarketState(symbol) {
-
-        return {
-
-            symbol,
-
-            connected: false,
-
-            subscribed: false,
-
-            tickCount: 0,
-
-            lastQuote: null,
-
-            lastDigit: null,
-
-            lastEpoch: null,
-
-            pipSize: null,
-
-            lastUpdate: null
-
-        };
-
-    }
-
-
-    /* ==========================================================
-     * CONNECT
-     * ========================================================== */
-
-    connect() {
-
-        if (
-            this.connected ||
-            this.connecting
-        ) {
-            return {
-                success: true,
-                status: "ALREADY_CONNECTED"
-            };
-        }
-
-
-        this.connecting = true;
-
-        this.emitStatus(
-            "CONNECTING"
-        );
 
 
         /*
-         * Current Deriv public market-data endpoint.
+         * ======================================================
+         * CONNECT
+         * ======================================================
          */
-        const url =
-            "wss://api.derivws.com/trading/v1/options/ws/public";
 
+        connect() {
 
-        try {
+            if (this.connected) {
+                return;
+            }
 
-            this.ws =
-                new WebSocket(url);
+            if (!this.appId) {
 
-        } catch (error) {
+                this.setStatus(
+                    "Missing App ID"
+                );
 
-            this.connecting = false;
+                console.warn(
+                    "DerivConnection: appId is required."
+                );
 
-            this.emitError(error);
+                return;
+            }
 
-            this.scheduleReconnect();
+            const url =
+                `wss://ws.derivws.com/websockets/v3?app_id=${encodeURIComponent(
+                    this.appId
+                )}`;
 
-            return {
-                success: false,
-                reason: error.message
-            };
+            try {
+
+                this.setStatus(
+                    "Connecting"
+                );
+
+                this.ws =
+                    new WebSocket(url);
+
+                this.ws.onopen =
+                    () => this.handleOpen();
+
+                this.ws.onmessage =
+                    event =>
+                        this.handleMessage(
+                            event
+                        );
+
+                this.ws.onerror =
+                    error =>
+                        this.handleError(
+                            error
+                        );
+
+                this.ws.onclose =
+                    event =>
+                        this.handleClose(
+                            event
+                        );
+
+            } catch (error) {
+
+                this.lastError =
+                    error.message;
+
+                this.setStatus(
+                    "Connection error"
+                );
+
+                this.scheduleReconnect();
+            }
         }
 
 
-        /* ======================================================
+        /*
+         * ======================================================
          * OPEN
-         * ====================================================== */
+         * ======================================================
+         */
 
-        this.ws.onopen = () => {
+        handleOpen() {
 
             this.connected = true;
 
-            this.connecting = false;
+            this.reconnectAttempts = 0;
 
-            this.reconnectDelay = 2000;
-
-            this.emitStatus(
-                "CONNECTED"
+            this.setStatus(
+                "Connected"
             );
 
+            this.emit({
+                type: "connected"
+            });
 
-            this.subscribeAllMarkets();
+            /*
+             * Authorization is optional for receiving
+             * public tick data.
+             *
+             * If a token was supplied, authorize first.
+             */
 
-        };
+            if (this.token) {
+
+                this.send({
+                    authorize:
+                        this.token
+                });
+
+            } else {
+
+                this.subscribeAllMarkets();
+            }
+        }
 
 
-        /* ======================================================
+        /*
+         * ======================================================
          * MESSAGE
-         * ====================================================== */
+         * ======================================================
+         */
 
-        this.ws.onmessage =
-            event => {
+        handleMessage(event) {
 
-                this.handleMessage(
+            let data;
+
+            try {
+
+                data =
+                    JSON.parse(
+                        event.data
+                    );
+
+            } catch (error) {
+
+                console.warn(
+                    "Invalid Deriv message:",
                     event.data
                 );
 
-            };
+                return;
+            }
 
+            if (data.error) {
 
-        /* ======================================================
-         * ERROR
-         * ====================================================== */
+                this.lastError =
+                    data.error.message ||
+                    "Deriv API error";
 
-        this.ws.onerror =
-            error => {
-
-                this.emitError(
-                    error
+                console.warn(
+                    "Deriv API error:",
+                    data.error
                 );
 
-            };
+                this.emit({
+                    type: "error",
+                    error: data.error
+                });
+
+                return;
+            }
 
 
-        /* ======================================================
-         * CLOSE
-         * ====================================================== */
+            /*
+             * Authorization response
+             */
 
-        this.ws.onclose =
-            () => {
+            if (
+                data.msg_type ===
+                "authorize"
+            ) {
 
-                this.connected = false;
+                this.authorized = true;
 
-                this.connecting = false;
-
-                this.markDisconnected();
-
-                this.emitStatus(
-                    "DISCONNECTED"
+                this.setStatus(
+                    "Authorized"
                 );
 
+                this.emit({
+                    type: "authorized",
+                    data
+                });
+
+                this.subscribeAllMarkets();
+
+                return;
+            }
+
+
+            /*
+             * Tick response
+             */
+
+            if (
+                data.msg_type ===
+                "tick"
+            ) {
+
+                this.handleTick(
+                    data
+                );
+
+                return;
+            }
+
+
+            /*
+             * Subscription response
+             */
+
+            if (
+                data.msg_type ===
+                "tick" &&
+                data.subscription
+            ) {
+
+                return;
+            }
+
+            this.emit({
+                type: "message",
+                data
+            });
+        }
+
+
+        /*
+         * ======================================================
+         * TICK
+         * ======================================================
+         */
+
+        handleTick(data) {
+
+            if (
+                !data ||
+                !data.tick
+            ) {
+                return;
+            }
+
+            const tick =
+                data.tick;
+
+            const symbol =
+                tick.symbol;
+
+            const quote =
+                Number(
+                    tick.quote
+                );
+
+            if (
+                !symbol ||
+                !Number.isFinite(
+                    quote
+                )
+            ) {
+                return;
+            }
+
+            const digit =
+                this.extractDigit(
+                    quote,
+                    tick
+                );
+
+            const normalized = {
+
+                symbol,
+
+                market:
+                    symbol,
+
+                quote,
+
+                digit,
+
+                epoch:
+                    Number(
+                        tick.epoch || 0
+                    ),
+
+                pip_size:
+                    tick.pip_size ??
+                    null,
+
+                receivedAt:
+                    Date.now(),
+
+                raw:
+                    data
+            };
+
+            this.lastTick =
+                normalized;
+
+
+            /*
+             * Send the tick to the
+             * master analysis engine.
+             */
+
+            if (
+                this.engine &&
+                typeof this.engine.receiveTick ===
+                "function"
+            ) {
+
+                try {
+
+                    this.engine.receiveTick(
+                        normalized
+                    );
+
+                } catch (error) {
+
+                    console.warn(
+                        "Analysis engine tick error:",
+                        error
+                    );
+
+                    this.lastError =
+                        error.message;
+                }
+            }
+
+
+            /*
+             * Notify dashboard/listeners.
+             */
+
+            this.emit({
+                type: "tick",
+                tick: normalized
+            });
+        }
+
+
+        /*
+         * ======================================================
+         * EXTRACT LAST DIGIT
+         * ======================================================
+         */
+
+        extractDigit(
+            quote,
+            tick = {}
+        ) {
+
+            const pipSize =
+                Number(
+                    tick.pip_size
+                );
+
+            if (
+                Number.isFinite(
+                    pipSize
+                ) &&
+                pipSize > 0 &&
+                pipSize < 1
+            ) {
+
+                const decimals =
+                    Math.max(
+                        0,
+                        Math.round(
+                            -Math.log10(
+                                pipSize
+                            )
+                        )
+                    );
 
                 if (
-                    this.shouldReconnect
+                    decimals > 0
                 ) {
-                    this.scheduleReconnect();
+
+                    const formatted =
+                        quote.toFixed(
+                            decimals
+                        );
+
+                    const digits =
+                        formatted.replace(
+                            /\D/g,
+                            ""
+                        );
+
+                    if (
+                        digits.length
+                    ) {
+
+                        return Number(
+                            digits[
+                                digits.length - 1
+                            ]
+                        );
+                    }
                 }
+            }
 
-            };
+            const text =
+                String(quote);
 
+            const digits =
+                text.replace(
+                    /\D/g,
+                    ""
+                );
 
-        return {
-            success: true,
-            status: "CONNECTING"
-        };
+            if (
+                !digits.length
+            ) {
+                return null;
+            }
 
-    }
-
-
-    /* ==========================================================
-     * SUBSCRIBE ALL MARKETS
-     * ========================================================== */
-
-    subscribeAllMarkets() {
-
-        if (
-            !this.connected ||
-            !this.ws
-        ) {
-            return;
+            return Number(
+                digits[
+                    digits.length - 1
+                ]
+            );
         }
 
 
         /*
-         * Deriv supports subscribing to multiple symbols
-         * through the ticks request.
+         * ======================================================
+         * SUBSCRIBE TO ALL MARKETS
+         * ======================================================
          */
-        this.send({
-            ticks: this.markets,
-            subscribe: 1
-        });
 
-    }
+        subscribeAllMarkets() {
 
+            if (
+                !this.connected
+            ) {
+                return;
+            }
 
-    /* ==========================================================
-     * SUBSCRIBE ONE MARKET
-     * ========================================================== */
+            for (
+                const symbol of
+                this.markets
+            ) {
 
-    subscribeMarket(symbol) {
-
-        if (
-            !symbol ||
-            !this.connected ||
-            !this.ws
-        ) {
-            return false;
-        }
-
-
-        if (
-            !this.markets.includes(symbol)
-        ) {
-
-            this.markets.push(symbol);
-
-        }
-
-
-        if (
-            !this.marketState[symbol]
-        ) {
-
-            this.marketState[symbol] =
-                this.createMarketState(symbol);
-
+                this.subscribe(
+                    symbol
+                );
+            }
         }
 
 
         /*
-         * Avoid duplicate subscriptions.
+         * ======================================================
+         * SUBSCRIBE ONE MARKET
+         * ======================================================
          */
-        if (
-            this.subscriptions[symbol]
-        ) {
+
+        subscribe(symbol) {
+
+            if (
+                !this.connected ||
+                !symbol
+            ) {
+                return false;
+            }
+
+            this.send({
+
+                ticks:
+                    symbol,
+
+                subscribe:
+                    1
+
+            });
+
+            this.subscriptions[
+                symbol
+            ] = true;
+
             return true;
         }
 
 
-        return this.send({
-            ticks: symbol,
-            subscribe: 1
-        });
-
-    }
-
-
-    /* ==========================================================
-     * SEND REQUEST
-     * ========================================================== */
-
-    send(request) {
-
-        if (
-            !this.ws ||
-            !this.connected
-        ) {
-
-            return {
-                success: false,
-                reason: "Deriv WebSocket is not connected"
-            };
-
-        }
-
-
-        const reqId =
-            ++this.requestId;
-
-
-        const payload = {
-            ...request,
-            req_id: reqId
-        };
-
-
-        try {
-
-            this.ws.send(
-                JSON.stringify(payload)
-            );
-
-
-            return {
-                success: true,
-                reqId
-            };
-
-        } catch (error) {
-
-            this.emitError(error);
-
-            return {
-                success: false,
-                reason: error.message
-            };
-
-        }
-
-    }
-
-
-    /* ==========================================================
-     * HANDLE MESSAGE
-     * ========================================================== */
-
-    handleMessage(rawMessage) {
-
-        let data;
-
-        try {
-
-            data =
-                typeof rawMessage === "string"
-                    ? JSON.parse(rawMessage)
-                    : rawMessage;
-
-        } catch (error) {
-
-            this.emitError({
-                message:
-                    "Invalid JSON from Deriv"
-            });
-
-            return;
-
-        }
-
-
         /*
-         * API error
+         * ======================================================
+         * UNSUBSCRIBE
+         * ======================================================
          */
-        if (
-            data.error
+
+        unsubscribe(
+            symbol
         ) {
 
-            this.emitError(
-                data.error
-            );
-
-            return;
-
-        }
-
-
-        /*
-         * Tick subscription confirmation.
-         *
-         * Some streaming responses include subscription.id.
-         */
-        if (
-            data.subscription &&
-            data.subscription.id
-        ) {
-
-            const subscriptionId =
-                data.subscription.id;
-
-
-            this.subscriptionIds[
-                subscriptionId
-            ] =
-                data.echo_req?.ticks ||
-                data.tick?.symbol ||
-                null;
-
+            if (
+                !this.connected ||
+                !symbol
+            ) {
+                return false;
+            }
 
             /*
-             * When a single symbol is returned,
-             * store it directly.
+             * Deriv subscriptions can be
+             * removed using forget_all.
+             *
+             * We use forget_all here to keep
+             * this connection simple and safe.
              */
-            const symbol =
-                data.tick?.symbol ||
-                (
-                    typeof data.echo_req?.ticks === "string"
-                        ? data.echo_req.ticks
-                        : null
-                );
 
+            this.send({
+                forget_all:
+                    "ticks"
+            });
+
+            this.subscriptions = {};
+
+            return true;
+        }
+
+
+        /*
+         * ======================================================
+         * SEND
+         * ======================================================
+         */
+
+        send(data) {
 
             if (
-                symbol
+                !this.ws ||
+                this.ws.readyState !==
+                WebSocket.OPEN
             ) {
 
-                this.subscriptions[
-                    symbol
-                ] =
-                    subscriptionId;
-
-
-                this.ensureMarket(symbol);
-
-                this.marketState[
-                    symbol
-                ].subscribed = true;
-
+                return false;
             }
-
-        }
-
-
-        /*
-         * Live tick.
-         */
-        if (
-            data.msg_type === "tick" &&
-            data.tick
-        ) {
-
-            this.handleTick(
-                data.tick,
-                data
-            );
-
-        }
-
-    }
-
-
-    /* ==========================================================
-     * HANDLE TICK
-     * ========================================================== */
-
-    handleTick(
-        tick,
-        rawResponse = {}
-    ) {
-
-        const symbol =
-            tick.symbol;
-
-
-        if (
-            !symbol
-        ) {
-            return;
-        }
-
-
-        const quote =
-            Number(
-                tick.quote
-            );
-
-
-        if (
-            !Number.isFinite(quote)
-        ) {
-            return;
-        }
-
-
-        this.ensureMarket(symbol);
-
-
-        const pipSize =
-            tick.pip_size ??
-            null;
-
-
-        const digit =
-            this.extractLastDigit(
-                quote,
-                pipSize
-            );
-
-
-        const state =
-            this.marketState[symbol];
-
-
-        state.connected = true;
-
-        state.subscribed = true;
-
-        state.tickCount++;
-
-        state.lastQuote = quote;
-
-        state.lastDigit = digit;
-
-        state.lastEpoch =
-            Number(
-                tick.epoch || 0
-            );
-
-        state.pipSize =
-            pipSize;
-
-        state.lastUpdate =
-            Date.now();
-
-
-        /*
-         * Normalized tick object.
-         */
-        const normalizedTick = {
-
-            symbol,
-
-            market: symbol,
-
-            quote,
-
-            epoch:
-                Number(
-                    tick.epoch || 0
-                ),
-
-            pip_size:
-                pipSize,
-
-            digit,
-
-            id:
-                tick.id ||
-                null,
-
-            source:
-                "deriv",
-
-            receivedAt:
-                Date.now(),
-
-            requestId:
-                rawResponse.req_id ||
-                null
-
-        };
-
-
-        /*
-         * Send the tick to market.js.
-         */
-        if (
-            window.marketManager &&
-            typeof
-            window.marketManager.receiveTick ===
-            "function"
-        ) {
-
-            try {
-
-                window.marketManager.receiveTick(
-                    normalizedTick
-                );
-
-            } catch (error) {
-
-                console.warn(
-                    "MarketManager tick error:",
-                    error
-                );
-
-            }
-
-        }
-
-
-        /*
-         * Send the same tick to engine.js.
-         */
-        if (
-            window.engine &&
-            typeof
-            window.engine.receiveTick ===
-            "function"
-        ) {
-
-            try {
-
-                window.engine.receiveTick(
-                    normalizedTick
-                );
-
-            } catch (error) {
-
-                console.error(
-                    "AnalysisEngine tick error:",
-                    error
-                );
-
-                this.emitError(error);
-
-            }
-
-        }
-
-
-        /*
-         * Notify dashboard/other listeners.
-         */
-        for (
-            const listener of
-            this.tickListeners
-        ) {
-
-            try {
-
-                listener(
-                    normalizedTick
-                );
-
-            } catch (error) {
-
-                console.warn(
-                    "Tick listener error:",
-                    error
-                );
-
-            }
-
-        }
-
-    }
-
-
-    /* ==========================================================
-     * EXTRACT LAST DIGIT
-     * ========================================================== */
-
-    extractLastDigit(
-        quote,
-        pipSize = null
-    ) {
-
-        const size =
-            Number(
-                pipSize
-            );
-
-
-        /*
-         * Use pip_size when supplied.
-         */
-        if (
-            Number.isFinite(size) &&
-            size > 0 &&
-            size < 1
-        ) {
-
-            const decimals =
-                Math.max(
-                    0,
-                    Math.round(
-                        -Math.log10(size)
-                    )
-                );
-
-
-            if (
-                decimals > 0
-            ) {
-
-                const formatted =
-                    quote.toFixed(
-                        decimals
-                    );
-
-
-                const digits =
-                    formatted.replace(
-                        /\D/g,
-                        ""
-                    );
-
-
-                if (
-                    digits.length > 0
-                ) {
-
-                    return Number(
-                        digits[
-                            digits.length - 1
-                        ]
-                    );
-
-                }
-
-            }
-
-        }
-
-
-        /*
-         * Fallback when pip_size is unavailable.
-         */
-        const text =
-            String(quote);
-
-
-        const digits =
-            text.replace(
-                /\D/g,
-                ""
-            );
-
-
-        if (
-            digits.length === 0
-        ) {
-
-            return null;
-
-        }
-
-
-        return Number(
-            digits[
-                digits.length - 1
-            ]
-        );
-
-    }
-
-
-    /* ==========================================================
-     * ENSURE MARKET EXISTS
-     * ========================================================== */
-
-    ensureMarket(symbol) {
-
-        if (
-            !this.markets.includes(symbol)
-        ) {
-
-            this.markets.push(symbol);
-
-        }
-
-
-        if (
-            !this.marketState[symbol]
-        ) {
-
-            this.marketState[symbol] =
-                this.createMarketState(symbol);
-
-        }
-
-    }
-
-
-    /* ==========================================================
-     * ADD MARKET
-     * ========================================================== */
-
-    addMarket(symbol) {
-
-        if (
-            typeof symbol !== "string"
-        ) {
-
-            return false;
-
-        }
-
-
-        symbol =
-            symbol.trim();
-
-
-        if (
-            !symbol
-        ) {
-
-            return false;
-
-        }
-
-
-        if (
-            this.markets.includes(symbol)
-        ) {
-
-            return false;
-
-        }
-
-
-        this.markets.push(symbol);
-
-        this.marketState[symbol] =
-            this.createMarketState(symbol);
-
-
-        if (
-            this.connected
-        ) {
-
-            this.subscribeMarket(
-                symbol
-            );
-
-        }
-
-
-        return true;
-
-    }
-
-
-    /* ==========================================================
-     * REMOVE MARKET
-     * ========================================================== */
-
-    removeMarket(symbol) {
-
-        const index =
-            this.markets.indexOf(symbol);
-
-
-        if (
-            index === -1
-        ) {
-
-            return false;
-
-        }
-
-
-        const subscriptionId =
-            this.subscriptions[symbol];
-
-
-        if (
-            subscriptionId &&
-            this.ws &&
-            this.connected
-        ) {
 
             try {
 
                 this.ws.send(
-                    JSON.stringify({
-                        forget:
-                            subscriptionId
-                    })
+                    JSON.stringify(
+                        data
+                    )
                 );
+
+                return true;
 
             } catch (error) {
 
+                this.lastError =
+                    error.message;
+
                 console.warn(
-                    "Deriv unsubscribe error:",
+                    "Deriv send error:",
                     error
                 );
 
+                return false;
             }
-
         }
 
 
-        this.markets.splice(
-            index,
-            1
-        );
+        /*
+         * ======================================================
+         * ERROR
+         * ======================================================
+         */
 
+        handleError(error) {
 
-        delete this.subscriptions[
-            symbol
-        ];
+            this.lastError =
+                "WebSocket connection error";
 
+            this.setStatus(
+                "Connection error"
+            );
 
-        delete this.marketState[
-            symbol
-        ];
-
-
-        return true;
-
-    }
-
-
-    /* ==========================================================
-     * GET MARKETS
-     * ========================================================== */
-
-    getMarkets() {
-
-        return [
-            ...this.markets
-        ];
-
-    }
-
-
-    /* ==========================================================
-     * GET MARKET STATE
-     * ========================================================== */
-
-    getMarketState(symbol) {
-
-        return this.marketState[symbol]
-            ? {
-                ...this.marketState[symbol]
-            }
-            : null;
-
-    }
-
-
-    /* ==========================================================
-     * GET ALL MARKET STATES
-     * ========================================================== */
-
-    getAllMarketStates() {
-
-        return JSON.parse(
-            JSON.stringify(
-                this.marketState
-            )
-        );
-
-    }
-
-
-    /* ==========================================================
-     * TICK LISTENER
-     * ========================================================== */
-
-    onTick(callback) {
-
-        if (
-            typeof callback !== "function"
-        ) {
-
-            return () => {};
-
+            this.emit({
+                type: "error",
+                error
+            });
         }
 
 
-        this.tickListeners.push(
-            callback
-        );
+        /*
+         * ======================================================
+         * CLOSE
+         * ======================================================
+         */
+
+        handleClose(event) {
+
+            this.connected = false;
+
+            this.authorized = false;
+
+            this.setStatus(
+                "Disconnected"
+            );
+
+            this.emit({
+                type: "disconnected",
+                event
+            });
+
+            this.scheduleReconnect();
+        }
 
 
-        return () => {
+        /*
+         * ======================================================
+         * RECONNECT
+         * ======================================================
+         */
 
-            this.tickListeners =
-                this.tickListeners.filter(
-                    listener =>
-                        listener !== callback
+        scheduleReconnect() {
+
+            if (
+                this.reconnectTimer
+            ) {
+                return;
+            }
+
+            if (
+                this.reconnectAttempts >=
+                this.maxReconnectAttempts
+            ) {
+
+                this.setStatus(
+                    "Reconnect limit reached"
                 );
 
-        };
+                return;
+            }
 
-    }
+            this.reconnectAttempts++;
 
+            const delay =
+                this.reconnectDelay *
+                this.reconnectAttempts;
 
-    /* ==========================================================
-     * STATUS LISTENER
-     * ========================================================== */
+            this.reconnectTimer =
+                setTimeout(
+                    () => {
 
-    onStatus(callback) {
+                        this.reconnectTimer =
+                            null;
 
-        if (
-            typeof callback !== "function"
-        ) {
+                        this.connect();
 
-            return () => {};
-
+                    },
+                    delay
+                );
         }
 
 
-        this.statusListeners.push(
+        /*
+         * ======================================================
+         * STATUS
+         * ======================================================
+         */
+
+        setStatus(
+            status
+        ) {
+
+            this.status =
+                status;
+
+            this.emit({
+                type: "status",
+                status
+            });
+        }
+
+
+        /*
+         * ======================================================
+         * LISTENERS
+         * ======================================================
+         */
+
+        onUpdate(
             callback
-        );
+        ) {
+
+            if (
+                typeof callback !==
+                "function"
+            ) {
+                return () => {};
+            }
+
+            this.listeners.push(
+                callback
+            );
+
+            return () => {
+
+                this.listeners =
+                    this.listeners.filter(
+                        listener =>
+                            listener !==
+                            callback
+                    );
+            };
+        }
 
 
-        return () => {
+        /*
+         * ======================================================
+         * EMIT
+         * ======================================================
+         */
 
-            this.statusListeners =
-                this.statusListeners.filter(
-                    listener =>
-                        listener !== callback
-     
+        emit(data) {
+
+            for (
+                const listener of
+                this.listeners
+            ) {
+
+                try {
+
+                    listener(
+                        data
+                    );
+
+                } catch (error) {
+
+                    console.warn(
+                        "Deriv listener error:",
+                        error
+                    );
+                }
+            }
+        }
+
+
+        /*
+         * ======================================================
+         * GET STATE
+         * ======================================================
+         */
+
+        getState() {
+
+            return {
+
+                connected:
+                    this.connected,
+
+                authorized:
+                    this.authorized,
+
+                status:
+                    this.status,
+
+                markets:
+                    [
+                        ...this.markets
+                    ],
+
+                subscriptions:
+                    {
+                        ...this.subscriptions
+                    },
+
+                lastTick:
+                    this.lastTick,
+
+                lastError:
+                    this.lastError,
+
+                reconnectAttempts:
+                    this.reconnectAttempts
+            };
+        }
+
+
+        /*
+         * ======================================================
+         * DISCONNECT
+         * ======================================================
+         */
+
+        disconnect() {
+
+            if (
+                this.reconnectTimer
+            ) {
+
+                clearTimeout(
+                    this.reconnectTimer
+                );
+
+                this.reconnectTimer =
+                    null;
+            }
+
+            this.reconnectAttempts = 0;
+
+            if (this.ws) {
+
+                try {
+
+                    this.ws.close();
+
+                } catch (error) {
+
+                    console.warn(
+                        "Deriv close error:",
+                        error
+                    );
+                }
+            }
+
+            this.ws = null;
+
+            this.connected = false;
+
+            this.authorized = false;
+
+            this.subscriptions = {};
+
+            this.setStatus(
+                "Disconnected"
+            );
+        }
+    }
+
+
+    /*
+     * ============================================================
+     * GLOBAL EXPORT
+     * ============================================================
+     */
+
+    global.DerivConnection =
+        DerivConnection;
+
+    global.derivConnection =
+        new DerivConnection({
+
+            engine:
+                global.engine || null,
+
+            markets:
+                global.GTraderMarkets &&
+                typeof global.GTraderMarkets.getSymbols ===
+                "function"
+                    ? global.GTraderMarkets.getSymbols()
+                    : undefined
+        })
+    
+
+    /*
+     * COMMONJS SUPPORT
+     */
+
+    if (
+        typeof module !== "undefined" &&
+        module.exports
+    ) {
+
+        module.exports =
+            DerivConnection;
+    }
+
+})(typeof window !== "undefined"
+    ? window
+    : globalThis);
