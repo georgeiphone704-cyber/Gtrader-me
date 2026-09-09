@@ -1,0 +1,17 @@
+{
+  "name": "gtraderme-backend",
+  "version": "1.0.0",
+  "private": true,
+  "description": "GTRADERME live Deriv backend: OAuth, live ticks, paper trading, demo/real Options execution.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18.17"
+  },
+  "dependencies": {
+    "express": "^5.1.0",
+    "ws": "^8.18.3"
+  }
+}
