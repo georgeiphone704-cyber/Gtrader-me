@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#0b1020">
+  <title>GTRADERME</title>
+  <style>
+    *{box-sizing:border-box}
+    body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:#0b1020;color:#eef2ff}
+    .wrap{max-width:1100px;margin:auto;padding:16px}
+    header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px}
+    h1{margin:0;font-size:24px}
+    .muted{color:#9aa6c3;font-size:13px}
+    .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+    .card{background:#121a2e;border:1px solid #25304a;border-radius:14px;padding:14px}
+    .wide{grid-column:1/-1}
+    label{display:block;font-size:12px;color:#9aa6c3;margin-bottom:6px}
+    select,input,button{width:100%;border:1px solid #303b58;border-radius:10px;background:#0e1527;color:#fff;padding:11px;font:inherit}
+    button{cursor:pointer;font-weight:700}
+    .row{display:flex;gap:8px}
+    .row>*{flex:1}
+    .value{font-size:28px;font-weight:800}
+    .status{font-weight:700}
+    .bars{display:grid;gap:9px}
+    .barline{display:grid;grid-template-columns:90px 1fr 48px;gap:8px;align-items:center;font-size:12px}
+    .track{height:8px;background:#26314b;border-radius:99px;overflow:hidden}
+    .bar{height:100%;width:0;background:#7dd3fc;border-radius:99px}
+    .good{color:#6ee7b7}.warn{color:#fbbf24}.bad{color:#fb7185}
+    #authMessage{min-height:18px}
+    table{width:100%;border-collapse:collapse;font-size:12px}
+    th,td{text-align:left;padding:7px;border-bottom:1px solid #26314b}
+    @media(max-width:700px){.grid{grid-template-columns:1fr}.wide{grid-column:auto}.row{flex-direction:column}}
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>GTRADERME</h1>
+      <div class="muted">Deriv digit analysis • live ticks • paper / demo / real</div>
+    </div>
+    <div id="connectionStatus" class="status bad">DISCONNECTED</div>
+  </header>
+
+  <div class="grid">
+    <section class="card wide">
+      <div class="row">
+        <div>
+          <label>Market</label>
+          <select id="marketSelector"></select>
+        </div>
+        <div>
+          <label>Trading mode</label>
+          <select id="tradingMode">
+            <option value="paper">Paper — live ticks</option>
+            <option value="demo">Demo account</option>
+            <option value="real">Real account</option>
+          </select>
+        </div>
+        <div>
+          <label>Deriv account</label>
+          <select id="accountSelector">
+            <option value="">Login to load accounts</option>
+          </select>
+        </div>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <button id="loginButton">Login with Deriv</button>
+        <button id="logoutButton">Logout</button>
+        <button id="startButton">Start</button>
+        <button id="pauseButton">Pause</button>
+        <button id="stopButton">Stop</button>
+      </div>
+      <div id="authMessage" class="muted" style="margin-top:10px"></div>
+    </section>
+
+    <section class="card">
+      <label>Market</label>
+      <div id="marketName" class="value">R_100</div>
+      <div id="marketState" class="muted">Initializing</div>
+    </section>
+
+    <section class="card">
+      <label>Live quote</label>
+      <div id="currentQuote" class="value">-</div>
+      <div>Last digit: <strong id="lastDigit">-</strong></div>
+    </section>
+
+    <section class="card">
+      <label>AI prediction</label>
+      <div id="prediction" class="value">-</div>
+      <div>Confidence: <strong id="confidence">0%</strong></div>
+    </section>
+
+    <section class="card">
+      <label>Engine decision</label>
+      <div id="decisionStatus" class="value">WAIT</div>
+      <div id="decisionNote" class="muted">Waiting</div>
+    </section>
+
+    <section class="card">
+      <label>Signal</label>
+      <div id="signal" class="value">WAIT</div>
+      <div>Probability: <strong id="probability">0%</strong></div>
+    </section>
+
+    <section class="card">
+      <label>Engine status</label>
+      <div id="engineStatus" class="value">READY</div>
+      <div>Modules agreeing: <strong id="moduleAgreement">0%</strong></div>
+    </section>
+
+    <section class="card">
+      <label>Tick memory</label>
+      <div id="tickCount" class="value">0</div>
+      <div id="memoryCount" class="muted">0 / 10000</div>
+    </section>
+
+    <section class="card wide">
+      <label>Analysis modules</label>
+      <div class="bars">
+        <div class="barline"><span>Pattern</span><div class="track"><div id="patternBar" class="bar"></div></div><span id="patternValue">0%</span></div>
+        <div class="barline"><span>Probability</span><div class="track"><div id="probabilityBar" class="bar"></div></div><span id="probabilityValue">0%</span></div>
+        <div class="barline"><span>Statistics</span><div class="track"><div id="statisticsBar" class="bar"></div></div><span id="statisticsValue">0%</span></div>
+        <div class="barline"><span>Transition</span><div class="track"><div id="transitionBar" class="bar"></div></div><span id="transitionValue">0%</span></div>
+        <div class="barline"><span>Markov</span><div class="track"><div id="markovBar" class="bar"></div></div><span id="markovValue">0%</span></div>
+        <div class="barline"><span>Cycle</span><div class="track"><div id="cycleBar" class="bar"></div></div><span id="cycleValue">0%</span></div>
+      </div>
+    </section>
+
+    <section class="card wide">
+      <label>Recommendation</label>
+      <div id="recommendation">Waiting</div>
+      <div class="muted" style="margin-top:6px">Updated: <span id="time">-</span></div>
+    </section>
+  </div>
+</div>
+
+<!-- Central market configuration -->
+<script src="analysis/markets.js"></script>
+
+<!-- Existing GTRADER-ME analysis modules -->
+<script src="analysis/patterns.js"></script>
+<script src="analysis/probability.js"></script>
+<script src="analysis/statistics.js"></script>
+<script src="analysis/transition.js"></script>
+<script src="analysis/markov.js"></script>
+<script src="analysis/cycle.js"></script>
+<script src="analysis/confidence.js"></script>
+<script src="analysis/entrylogic.js"></script>
+<script src="analysis/entropylogic.js"></script>
+<script src="analysis/learning.js"></script>
+<script src="analysis/performance.js"></script>
+<script src="analysis/riskManager.js"></script>
+<script src="analysis/tradeManager.js"></script>
+<script src="analysis/paperTrading.js"></script>
+
+<!-- Existing master engine: do not rebuild it here -->
+<script src="analysis/engine.js"></script>
+
+<script>
+/* ============================================================
+ * GTRADERME FRONTEND <-> BACKEND BRIDGE
+ * One integration layer; no engine/module replacement.
+ * ============================================================ */
+(() => {
+  "use strict";
+
+  /*
+   * IMPORTANT:
+   * Replace this ONE value with the HTTPS URL Render gives you
+   * after the backend is deployed.
+   */
+  const BACKEND_URL = "https://YOUR-RENDER-SERVICE.onrender.com";
+
+  const cleanBase = BACKEND_URL.replace(/\/+$/, "");
+  const wsBase = cleanBase.replace(/^http:/, "ws:").replace(/^https:/, "wss:");
+
+  const listeners = {
+    tick: new Set(),
+    status: new Set(),
+    error: new Set()
+  };
+
+  let socket = null;
+  let currentSymbol = "R_100";
+  let currentMode = "paper";
+  let accountId = "";
+
+  const emit = (type, value) => {
+    for (const fn of listeners[type] || []) {
+      try { fn(value); } catch (e) { console.warn("GTRADER bridge listener:", e); }
+    }
+  };
+
+  const status = (value) => {
+    const el = document.getElementById("connectionStatus");
+    if (el) {
+      el.textContent = value;
+      el.className = "status " +
+        (value === "CONNECTED" || value === "TRADING_CONNECTED" ? "good" :
+         value === "ERROR" || value === "DISCONNECTED" ? "bad" : "warn");
+    }
+    emit("status", value);
+  };
+
+  function closeSocket() {
+    if (socket) {
+      try { socket.close(); } catch (_) {}
+      socket = null;
+    }
+  }
+
+  function wsUrl() {
+    const params = new URLSearchParams();
+    params.set("mode", currentMode);
+    if (currentMode !== "paper" && accountId) params.set("accountId", accountId);
+    return `${wsBase}/ws/deriv?${params.toString()}`;
+  }
+
+  function normalizeTick(message) {
+    const tick = message?.tick;
+    if (!tick) return null;
+
+    const quote = Number(tick.quote);
+    if (!Number.isFinite(quote)) return null;
+
+    let digit = Number.isInteger(tick.digit) ? tick.digit : null;
+    if (digit === null) {
+      const pip = Number(tick.pip_size);
+      if (Number.isFinite(pip) && pip > 0 && pip < 1) {
+        const decimals = Math.max(0, Math.round(-Math.log10(pip)));
+        digit = Number(String(quote.toFixed(decimals)).replace(/\D/g, "").slice(-1));
+      } else {
+        digit = Number(String(quote).replace(/\D/g, "").slice(-1));
+      }
+    }
+
+    return {
+      id: tick.id ?? tick.tick_id ?? null,
+      symbol: tick.symbol || currentSymbol,
+      market: tick.symbol || currentSymbol,
+      quote,
+      epoch: Number(tick.epoch || 0),
+      pip_size: tick.pip_size ?? null,
+      digit,
+      raw: message
+    };
+  }
+
+  function connect(symbol = currentSymbol) {
+    currentSymbol = symbol || currentSymbol;
+    closeSocket();
+
+    if (currentMode !== "paper" && !accountId) {
+      status("LOGIN_REQUIRED");
+      return false;
+    }
+
+    status("CONNECTING");
+
+    try {
+      socket = new WebSocket(wsUrl());
+    } catch (e) {
+      emit("error", e);
+      status("ERROR");
+      return false;
+    }
+
+    socket.onopen = () => {
+      status(currentMode === "paper" ? "CONNECTED" : "TRADING_CONNECTED");
+      socket.send(JSON.stringify({ ticks: currentSymbol, subscribe: 1 }));
+    };
+
+    socket.onmessage = event => {
+      let message;
+      try { message = JSON.parse(event.data); }
+      catch (_) { return; }
+
+      if (message.error) {
+        const e = new Error(message.error.message || "Backend/Deriv error");
+        emit("error", e);
+        return;
+      }
+
+      const tick = normalizeTick(message);
+      if (tick) emit("tick", tick);
+    };
+
+    socket.onerror = () => {
+      const e = new Error("GTRADERME backend WebSocket error");
+      emit("error", e);
+      status("ERROR");
+    };
+
+    socket.onclose = () => {
+      socket = null;
+      status("DISCONNECTED");
+    };
+
+    return true;
+  }
+
+  function changeMarket(symbol) {
+    currentSymbol = symbol;
+    if (socket && socket.readyState === WebSocket.OPEN) {
+      socket.send(JSON.stringify({ forget_all: "ticks" }));
+      socket.send(JSON.stringify({ ticks: symbol, subscribe: 1 }));
+    } else {
+      connect(symbol);
+    }
+  }
+
+  async function backend(path, options = {}) {
+    const response = await fetch(cleanBase + path, {
+      credentials: "include",
+      ...options,
+      headers: {
+        "Content-Type": "application/json",
+        ...(options.headers || {})
+      }
+    });
+    const text = await response.text();
+    let data = {};
+    try { data = text ? JSON.parse(text) : {}; } catch (_) {}
+    if (!response.ok) {
+      throw new Error(data?.error || data?.message || `Backend error ${response.status}`);
+    }
+    return data;
+  }
+
+  window.GTRADER_CONFIG = { backendUrl: cleanBase };
+
+  window.derivFeed = {
+    connect,
+    disconnect: () => { closeSocket(); status("DISCONNECTED"); },
+    changeMarket,
+    setCredentials: opts => {
+      if (opts?.accountId !== undefined) accountId = String(opts.accountId || "");
+      if (opts?.tradingMode !== undefined) currentMode = String(opts.tradingMode || "paper");
+      return { accountId, tradingMode: currentMode };
+    },
+    onTick: fn => { if (typeof fn === "function") listeners.tick.add(fn); return () => listeners.tick.delete(fn); },
+    onStatus: fn => { if (typeof fn === "function") listeners.status.add(fn); return () => listeners.status.delete(fn); },
+    onError: fn => { if (typeof fn === "function") listeners.error.add(fn); return () => listeners.error.delete(fn); },
+    backend,
+    getState: () => ({ currentSymbol, currentMode, accountId, connected: !!socket })
+  };
+
+  window.GTRADER_MARKETS =
+    window.GtraderMarkets?.getMarkets?.() ||
+    window.GTraderMarkets?.getMarkets?.() || [
+      {symbol:"R_10",name:"Volatility 10 Index"},
+      {symbol:"R_25",name:"Volatility 25 Index"},
+      {symbol:"R_50",name:"Volatility 50 Index"},
+      {symbol:"R_75",name:"Volatility 75 Index"},
+      {symbol:"R_100",name:"Volatility 100 Index"},
+      {symbol:"1HZ10V",name:"Volatility 10 (1s) Index"},
+      {symbol:"1HZ25V",name:"Volatility 25 (1s) Index"},
+      {symbol:"1HZ50V",name:"Volatility 50 (1s) Index"},
+      {symbol:"1HZ75V",name:"Volatility 75 (1s) Index"},
+      {symbol:"1HZ100V",name:"Volatility 100 (1s) Index"}
+    ];
+
+  async function loadSession() {
+    const message = document.getElementById("authMessage");
+    try {
+      const me = await backend("/api/auth/me");
+      if (me?.authenticated) {
+        message.textContent = "Deriv account connected.";
+        await loadAccounts();
+      } else {
+        message.textContent = "Not logged in. Paper mode can still use live ticks.";
+      }
+    } catch (e) {
+      message.textContent = "Backend not connected yet — deploy it, then replace BACKEND_URL.";
+    }
+  }
+
+  async function loadAccounts() {
+    const select = document.getElementById("accountSelector");
+    try {
+      const result = await backend("/api/accounts");
+      const accounts = Array.isArray(result?.data) ? result.data : [];
+      select.innerHTML = "";
+      for (const account of accounts) {
+        const id = account.account_id || account.id || account.loginid;
+        if (!id) continue;
+        const type = String(account.account_type || account.type || "").toLowerCase();
+        const label = `${type === "real" ? "REAL" : "DEMO"} — ${id}`;
+        const option = document.createElement("option");
+        option.value = id;
+        option.textContent = label;
+        option.dataset.type = type;
+        select.appendChild(option);
+      }
+      if (!select.options.length) {
+        select.innerHTML = '<option value="">No trading accounts returned</option>';
+      }
+    } catch (e) {
+      select.innerHTML = '<option value="">Login required</option>';
+    }
+  }
+
+  document.addEventListener("DOMContentLoaded", () => {
+    const markets = document.getElementById("marketSelector");
+    for (const m of window.GTRADER_MARKETS) {
+      const option = document.createElement("option");
+      option.value = m.symbol;
+      option.textContent = m.name;
+      if (m.symbol === "R_100") option.selected = true;
+      markets.appendChild(option);
+    }
+
+    document.getElementById("loginButton")?.addEventListener("click", () => {
+      if (cleanBase.includes("YOUR-RENDER-SERVICE")) {
+        document.getElementById("authMessage").textContent =
+          "Deploy the backend first, then replace BACKEND_URL with the Render URL.";
+        return;
+      }
+      window.location.href = cleanBase + "/api/auth/start";
+    });
+
+    document.getElementById("logoutButton")?.addEventListener("click", async () => {
+      try { await backend("/api/auth/logout", { method: "POST", body: "{}" }); } catch (_) {}
+      document.getElementById("authMessage").textContent = "Logged out.";
+      document.getElementById("accountSelector").innerHTML =
+        '<option value="">Login to load accounts</option>';
+      currentMode = "paper";
+      accountId = "";
+      connect(currentSymbol);
+    });
+
+    document.getElementById("tradingMode")?.addEventListener("change", e => {
+      currentMode = e.target.value;
+      connect(currentSymbol);
+    });
+
+    document.getElementById("accountSelector")?.addEventListener("change", e => {
+      accountId = e.target.value;
+      const selected = e.target.selectedOptions[0];
+      if (selected?.dataset.type === "real") {
+        currentMode = "real";
+        document.getElementById("tradingMode").value = "real";
+      } else if (accountId) {
+        currentMode = "demo";
+        document.getElementById("tradingMode").value = "demo";
+      }
+      connect(currentSymbol);
+    });
+
+    loadSession();
+
+    // Start in paper mode. This is live market data, not generated simulation.
+    connect("R_100");
+  });
+})();
+</script>
+
+<!-- Dashboard controller must load last -->
+<script src="script.js"></script>
+</body>
+</html>
